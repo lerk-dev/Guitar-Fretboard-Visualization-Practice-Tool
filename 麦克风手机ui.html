@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>吉他音阶与和弦练习工具</title>
+    <script>
+    // PitchFinder库内联代码 - 直接嵌入YIN算法实现
+    (function(global) {
+        // PitchFinder主对象
+        var Pitchfinder = {};
+        
+        // YIN算法实现
+        Pitchfinder.YIN = function(config) {
+            var DEFAULT_THRESHOLD = 0.1;
+            
+            config = config || {};
+            var threshold = config.threshold || DEFAULT_THRESHOLD;
+            
+            return function(float32AudioBuffer) {
+                // 实现YIN算法
+                var bufferLength = float32AudioBuffer.length;
+                var halfLength = Math.floor(bufferLength / 2);
+                var yinBuffer = new Float32Array(halfLength);
+                
+                // 步骤1: 自相关函数
+                for (var t = 0; t < halfLength; t++) {
+                    yinBuffer[t] = 0;
+                    for (var i = 0; i < halfLength; i++) {
+                        var delta = float32AudioBuffer[i] - float32AudioBuffer[i + t];
+                        yinBuffer[t] += delta * delta;
+                    }
+                }
+                
+                // 步骤2: 累积归一化平均差函数
+                var runningSum = 0;
+                yinBuffer[0] = 1;
+                for (var t = 1; t < halfLength; t++) {
+                    runningSum += yinBuffer[t];
+                    yinBuffer[t] *= t / runningSum;
+                }
+                
+                // 步骤3: 阈值函数
+                var tau = 0;
+                for (var t = 1; t < halfLength; t++) {
+                    if (yinBuffer[t] < threshold) {
+                        while (t + 1 < halfLength && yinBuffer[t + 1] < yinBuffer[t]) {
+                            t++;
+                        }
+                        tau = t;
+                        break;
+                    }
+                }
+                
+                // 步骤4: 精确周期估计
+                var period;
+                if (tau === 0) {
+                    period = 0;
+                } else {
+                    // 使用抛物线插值提高精度
+                    var betterTau = tau;
+                    if (tau < halfLength - 1) {
+                        var s0 = yinBuffer[tau - 1];
+                        var s1 = yinBuffer[tau];
+                        var s2 = yinBuffer[tau + 1];
+                        var adjustment = (s2 - s0) / (2 * (2 * s1 - s2 - s0));
+                        betterTau = tau + adjustment;
+                    }
+                    period = betterTau;
+                }
+                
+                // 计算频率 - 如果周期为0，则返回-1表示无法检测
+                var frequency = period !== 0 ? 48000 / period : -1;
+                
+                // 过滤掉不合理的频率值
+                if (frequency < 65 || frequency > 4000) {
+                    return null;
+                }
+                
+                return frequency;
+            };
+        };
+        
+        // 将PitchFinder暴露给全局
+        global.Pitchfinder = Pitchfinder;
+    })(window);
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a3a, #0d1b2a);
+            color: #e0e0e0;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background-color: rgba(40, 40, 50, 0.9);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 152, 0, 0.3);
+            padding-bottom: 15px;
+        }
+        
+        h1 {
+            color: #ff9800;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .instructions {
+            color: #b0b0b0;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        
+        /* 手机APP式设置面板 - 紧凑版 */
+        .settings-panel {
+            background: linear-gradient(to right, rgba(51, 51, 51, 0.8), rgba(60, 60, 70, 0.8));
+            border-radius: 12px;
+            padding: 0;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        /* 选项卡式导航 */
+        .settings-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(40, 40, 50, 0.8);
+        }
+        
+        .settings-tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            color: #aaa;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .settings-tab.active {
+            color: #ff9800;
+            border-bottom: 2px solid #ff9800;
+            background: rgba(255, 152, 0, 0.1);
+        }
+        
+        /* 设置内容区域 */
+        .settings-content {
+            padding: 12px;
+        }
+        
+        .settings-section {
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .settings-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .settings-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ff9800;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .settings-section-title i {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .settings-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .settings-label {
+            font-size: 14px;
+            color: #e0e0e0;
+            margin-bottom: 6px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .settings-label .info {
+            color: #888;
+            font-size: 14px;
+        }
+        
+        /* 手机友好的选择框 */
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        
+        .select-wrapper::after {
+            content: "▼";
+            font-size: 10px;
+            color: #ff9800;
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+        
+        select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #555;
+            background-color: #2c2c3c;
+            color: #fff;
+            font-size: 14px;
+            appearance: none;
+            -webkit-appearance: none;
+            outline: none;
+            transition: all 0.2s;
+        }
+        
+        select:focus {
+            border-color: #ff9800;
+            box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.3);
+        }
+        
+        /* 开关样式 */
+        .switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+        }
+        
+        .switch-label {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 26px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #555;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #ff9800;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        
+        /* 和弦类型选择器 - 改为按钮式 */
+        .chord-type-container {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(min-content, 1fr));
+            gap: 8px;
+            width: 100%;
+        }
+        
+        .chord-type-btn {
+            padding: 8px 6px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background-color: #2c2c3c;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 0;
+            white-space: nowrap;
+        }
+        
+        .chord-type-btn.active {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: #ff9800;
+            border-color: #ff9800;
+        }
+        
+        /* 顺序/乱序按钮样式 */
+        .order-btn-container {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        
+        .order-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border-radius: 8px;
+            border: 1px solid #555;
+            background-color: #2c2c3c;
+            color: #aaa;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .order-btn.active {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: #ff9800;
+            border-color: #ff9800;
+        }
+        
+        /* 按钮样式 */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            padding: 18px 32px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(to right, #4fc3f7, #29b6f6);
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            flex: 1;
+            max-width: 280px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        }
+        
+        /* 响应式设计 */
+        @media (min-width: 768px) {
+            .chord-type-container {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .settings-row {
+                flex-direction: row;
+                align-items: center;
+            }
+            
+            .settings-label {
+                min-width: 100px;
+                margin-bottom: 0;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 16px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .btn {
+                padding: 16px 24px;
+                font-size: 16px;
+            }
+            
+            .settings-section-title {
+                font-size: 16px;
+            }
+            
+            .settings-tab {
+                padding: 14px 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* 节拍器闪烁动画 */
+        @keyframes metronome-flash {
+            0% { background: linear-gradient(135deg, #0f172a, #1e293b); }
+            10% { background: linear-gradient(135deg, #1a2942, #2a3c52); }
+            20% { background: linear-gradient(135deg, #0f172a, #1e293b); }
+        }
+        
+        /* 节拍器激活时的背景闪烁 */
+        .metronome-active {
+            animation: metronome-flash var(--metronome-speed) infinite;
+        }
+
+        /* 练习模式全屏样式（保持不变） */
+        #practiceScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .exercise-container {
+            background: linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(71, 85, 105, 0.95));
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 24px;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 800px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .scale-info {
+            margin-bottom: 24px;
+        }
+        
+        .target-interval {
+            font-size: 36px;
+            font-weight: 700;
+            color: #38bdf8;
+            margin: 12px 0;
+            text-shadow: 0 4px 8px rgba(56, 189, 248, 0.3);
+            letter-spacing: -0.5px;
+        }
+        
+        .sequence-display {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .sequence-title {
+            font-size: 16px;
+            color: #94a3b8;
+            margin-bottom: 16px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        
+        .sequence-items {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 10px 0;
+            margin: 0 auto;
+            width: 100%;
+        }
+        
+        .sequence-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 700;
+            color: #ff8a00;
+            transition: all 0.3s ease;
+            padding: 8px;
+            border-radius: 6px;
+            background: rgba(51, 65, 85, 0.9);
+            min-width: 36px;
+            height: 36px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            flex: 0 1 auto;
+        }
+        
+        .sequence-item.played {
+            color: #64748b !important;
+            background: rgba(30, 41, 59, 0.6) !important;
+            box-shadow: none !important;
+            border-color: rgba(100, 116, 139, 0.3);
+            transform: scale(0.95);
+        }
+        
+        .sequence-item.current {
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.15);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            border-color: rgba(56, 189, 248, 0.3);
+            animation: pulse-glow 2s infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            }
+            50% { 
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(56, 189, 248, 0.6);
+            }
+            100% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            }
+        }
+        
+        .next-exercise {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-top: 24px;
+            width: 100%;
+            max-width: 700px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        
+        .next-label {
+            font-size: 14px;
+            color: #94a3b8;
+            white-space: nowrap;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .next-content-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+        
+        .next-content {
+            font-size: 16px;
+            color: #ff8a00;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        /* 状态指示器 */
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-recording {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        
+        .status-ready {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+        
+        /* 键盘快捷键提示 */
+        .shortcut-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.8);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .shortcut-key {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin: 0 4px;
+            font-weight: 600;
+            color: #ff8a00;
+        }
+        
+        /* 实时音高显示 */
+        .pitch-display {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .pitch-display.in-tune {
+            border-color: rgba(34, 197, 94, 0.5);
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+        }
+        
+        .pitch-display.out-of-tune {
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+        
+        .confidence-bar {
+            margin-top: 8px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: #38bdf8;
+            border-radius: 2px;
+            transition: width 0.2s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- 状态指示器 -->
+    <div class="status-indicator status-ready" id="statusIndicator">准备就绪</div>
+    
+    <!-- 键盘快捷键提示 -->
+    <div class="shortcut-hint" id="shortcutHint">
+        按 <span class="shortcut-key">ESC</span> 返回主菜单
+    </div>
+    
+    <!-- 实时音高显示 -->
+    <div class="pitch-display" id="pitchDisplay" style="display: none;">
+        <div>音高: --</div>
+        <div>音分差: 0</div>
+        <div class="confidence-bar">
+            <div class="confidence-fill" style="width: 0%"></div>
+        </div>
+    </div>
+    
+    <div class="container" id="mainScreen">
+        <div class="header">
+            <h1>🎸 吉他音阶与和弦练习工具</h1>
+            <div class="instructions">
+                使用麦克风拾音，在正确音高上下20音分范围内即判定弹对。点击开始练习进入全屏模式。
+            </div>
+        </div>
+        
+        <!-- 手机APP式设置面板 -->
+        <div class="settings-panel">
+            <!-- 选项卡导航 -->
+            <div class="settings-tabs">
+                <div class="settings-tab active" data-tab="scale">音阶练习</div>
+                <div class="settings-tab" data-tab="chord">和弦练习</div>
+            </div>
+            
+            <!-- 设置内容区域 -->
+            <div class="settings-content">
+                <!-- 节拍器设置 -->
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <i>🎯</i> 节拍器设置
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="switch-label">启用节拍器</span>
+                            <label class="switch">
+                                <input type="checkbox" id="metronomeToggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 5px; width: 60%; margin-left: auto;">
+                            <span style="white-space: nowrap; font-size: 14px;">速度:</span>
+                            <input type="range" id="metronomeTempo" min="20" max="120" step="1" value="40" style="width: 65%; margin-right: 3px;">
+                            <span id="metronomeTempoValue" style="min-width: 25px; text-align: right; font-size: 14px;">40</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 音阶设置 -->
+                <div class="settings-section scale-settings">
+                    <div class="settings-section-title">
+                        <i>🎵</i> 音阶设置
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            根音
+                            <span class="info">选择音阶的起始音符</span>
+                        </div>
+                        <div class="select-wrapper">
+                            <select id="rootNote">
+                                <option value="C">C</option>
+                                <option value="C♯">C♯</option>
+                                <option value="D">D</option>
+                                <option value="D♯">D♯</option>
+                                <option value="E">E</option>
+                                <option value="F">F</option>
+                                <option value="F♯">F♯</option>
+                                <option value="G">G</option>
+                                <option value="G♯">G♯</option>
+                                <option value="A">A</option>
+                                <option value="A♯">A♯</option>
+                                <option value="B">B</option>
+                                <option value="random" selected>随机根音</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            调式
+                            <span class="info">选择音阶的类型和模式</span>
+                        </div>
+                        <div class="select-wrapper">
+                            <select id="scaleType">
+                                <option value="major">Major</option>
+                                <option value="minor">Minor</option>
+                                <option value="majorPentatonic">Major Pentatonic</option>
+                                <option value="minorPentatonic">Minor Pentatonic</option>
+                                <option value="blues">Blues</option>
+                                <option value="dorian">Dorian</option>
+                                <option value="mixolydian">Mixolydian</option>
+                                <option value="random" selected>随机调式</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            顺序
+                            <span class="info">选择音阶的演奏顺序</span>
+                        </div>
+                        <div class="order-btn-container">
+                            <div class="order-btn scale-order-btn active" data-value="ordered">顺序</div>
+                            <div class="order-btn scale-order-btn" data-value="random">乱序</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 和弦设置 -->
+                <div class="settings-section chord-settings" style="display: none;">
+                    <div class="settings-section-title">
+                        <i>🎶</i> 和弦设置
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            根音
+                            <span class="info">选择和弦的根音</span>
+                        </div>
+                        <div class="select-wrapper">
+                            <select id="chordRootNote">
+                                <option value="C">C</option>
+                                <option value="C♯">C♯</option>
+                                <option value="D">D</option>
+                                <option value="D♯">D♯</option>
+                                <option value="E">E</option>
+                                <option value="F">F</option>
+                                <option value="F♯">F♯</option>
+                                <option value="G">G</option>
+                                <option value="G♯">G♯</option>
+                                <option value="A">A</option>
+                                <option value="A♯">A♯</option>
+                                <option value="B">B</option>
+                                <option value="random" selected>随机根音</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            和弦类型
+                            <span class="info">选择要练习的和弦类型</span>
+                        </div>
+                        <div class="chord-type-container">
+                            <div class="chord-type-btn active" data-value="major">Major</div>
+                            <div class="chord-type-btn active" data-value="minor">Minor</div>
+                            <div class="chord-type-btn" data-value="major6">6</div>
+                            <div class="chord-type-btn" data-value="minor6">m6</div>
+                            <div class="chord-type-btn active" data-value="dominant7">7</div>
+                            <div class="chord-type-btn" data-value="major7">Maj7</div>
+                            <div class="chord-type-btn" data-value="minor7">m7</div>
+                            <div class="chord-type-btn" data-value="minor7b5">m7♭5</div>
+                            <div class="chord-type-btn" data-value="dominant9">9</div>
+                            <div class="chord-type-btn" data-value="major9">Maj9</div>
+                            <div class="chord-type-btn" data-value="minor9">m9</div>
+                            <div class="chord-type-btn" data-value="sus2">sus2</div>
+                            <div class="chord-type-btn" data-value="sus4">sus4</div>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            顺序
+                            <span class="info">选择和弦音符的演奏顺序</span>
+                        </div>
+                        <div class="order-btn-container">
+                            <div class="order-btn chord-order-btn active" data-value="ordered">顺序</div>
+                            <div class="order-btn chord-order-btn" data-value="random">乱序</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" id="startBtn">开始练习</button>
+        </div>
+    </div>
+    
+    <!-- 练习模式全屏页面（保持不变） -->
+    <div id="practiceScreen">
+        <div class="exercise-container">
+            <div class="scale-info">
+                <div class="target-interval" id="targetInterval">C Major</div>
+            </div>
+            
+            <div class="sequence-display">
+                <div class="sequence-title">请依次弹奏以下音级:</div>
+                <div class="sequence-items" id="sequenceDisplay"></div>
+            </div>
+        </div>
+        
+        <div class="next-exercise">
+            <div class="next-content-wrapper">
+                <div class="next-label">下一个:</div>
+                <div class="next-content" id="nextExercise">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 吉他标准调弦
+            const standardTuning = ['E', 'B', 'G', 'D', 'A', 'E'];
+            
+            // 所有可能的音级
+            const intervals = ['1', '♭2', '2', '♭3', '3', '4', '♯4', '5', '♭6', '6', '♭7', '7'];
+            
+            // 音级到半音距离的映射
+            const intervalToSemitones = {
+                '1': 0,
+                '♭2': 1,
+                '2': 2,
+                '♭3': 3,
+                '3': 4,
+                '4': 5,
+                '♯4': 6,
+                '♭5': 6,
+                '5': 7,
+                '♭6': 8,
+                '6': 9,
+                '♭7': 10,
+                '7': 11
+            };
+            
+            // 音名到半音数的映射（C = 0）
+            const noteToSemitones = {
+                'C': 0, 'C♯': 1, 'D♭': 1, 'D': 2, 'D♯': 3, 'E♭': 3, 'E': 4, 
+                'F': 5, 'F♯': 6, 'G♭': 6, 'G': 7, 'G♯': 8, 'A♭': 8, 
+                'A': 9, 'A♯': 10, 'B♭': 10, 'B': 11
+            };
+            
+            // 音阶类型定义
+            const scaleTypes = {
+                'major': { name: 'Major', intervals: ['1', '2', '3', '4', '5', '6', '7'] },
+                'minor': { name: 'Minor', intervals: ['1', '2', '♭3', '4', '5', '♭6', '♭7'] },
+                'majorPentatonic': { name: 'Major Pentatonic', intervals: ['1', '2', '3', '5', '6'] },
+                'minorPentatonic': { name: 'Minor Pentatonic', intervals: ['1', '♭3', '4', '5', '♭7'] },
+                'blues': { name: 'Blues', intervals: ['1', '♭3', '4', '♯4', '5', '♭7'] },
+                'dorian': { name: 'Dorian', intervals: ['1', '2', '♭3', '4', '5', '6', '♭7'] },
+                'mixolydian': { name: 'Mixolydian', intervals: ['1', '2', '3', '4', '5', '6', '♭7'] }
+            };
+            
+            // 和弦类型定义
+            const chordTypes = {
+                'major': { name: '大三和弦', intervals: ['1', '3', '5'] },
+                'minor': { name: '小三和弦', intervals: ['1', '♭3', '5'] },
+                'major6': { name: '大六和弦', intervals: ['1', '3', '5', '6'] },
+                'minor6': { name: '小六和弦', intervals: ['1', '♭3', '5', '6'] },
+                'dominant7': { name: '属七和弦', intervals: ['1', '3', '5', '♭7'] },
+                'major7': { name: '大七和弦', intervals: ['1', '3', '5', '7'] },
+                'minor7': { name: '小七和弦', intervals: ['1', '♭3', '5', '♭7'] },
+                'minor7b5': { name: '半减七和弦', intervals: ['1', '♭3', '♭5', '♭7'] },
+                'dominant9': { name: '属九和弦', intervals: ['1', '3', '5', '♭7', '9'] },
+                'major9': { name: '大九和弦', intervals: ['1', '3', '5', '7', '9'] },
+                'minor9': { name: '小九和弦', intervals: ['1', '♭3', '5', '♭7', '9'] },
+                'sus2': { name: '挂二和弦', intervals: ['1', '2', '5'] },
+                'sus4': { name: '挂四和弦', intervals: ['1', '4', '5'] }
+            };
+            
+            // 元素引用
+            const mainScreen = document.getElementById('mainScreen');
+            const practiceScreen = document.getElementById('practiceScreen');
+            const targetIntervalEl = document.getElementById('targetInterval');
+            const sequenceDisplayEl = document.getElementById('sequenceDisplay');
+            const nextExerciseEl = document.getElementById('nextExercise');
+            const startBtn = document.getElementById('startBtn');
+            const rootNoteEl = document.getElementById('rootNote');
+            const scaleTypeEl = document.getElementById('scaleType');
+            const chordRootNoteEl = document.getElementById('chordRootNote');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const shortcutHint = document.getElementById('shortcutHint');
+            const metronomeToggleEl = document.getElementById('metronomeToggle');
+            const metronomeTempoEl = document.getElementById('metronomeTempo');
+            const metronomeTempoValueEl = document.getElementById('metronomeTempoValue');
+            
+            // 选项卡元素
+            const settingsTabs = document.querySelectorAll('.settings-tab');
+            const scaleSettings = document.querySelector('.scale-settings');
+            const chordSettings = document.querySelector('.chord-settings');
+            
+            // 和弦类型按钮
+            const chordTypeBtns = document.querySelectorAll('.chord-type-btn');
+            
+            // 屏幕唤醒锁变量
+            let wakeLock = null;
+            
+            // 请求屏幕唤醒锁
+            async function requestWakeLock() {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log('屏幕唤醒锁已激活');
+                        
+                        // 监听唤醒锁释放
+                        wakeLock.addEventListener('release', () => {
+                            console.log('屏幕唤醒锁已释放');
+                        });
+                    }
+                } catch (err) {
+                    console.error(`无法获取屏幕唤醒锁: ${err.message}`);
+                }
+            }
+            
+            // 释放屏幕唤醒锁
+            function releaseWakeLock() {
+                if (wakeLock !== null) {
+                    wakeLock.release();
+                    wakeLock = null;
+                }
+            }
+            
+            // 音频分析变量
+            let audioContext = null;
+            let analyser = null;
+            let microphone = null;
+            let javascriptNode = null;
+            let isRecording = false;
+            let mediaStream = null;
+            
+            // 练习状态
+            let state = {
+                score: 0,
+                correctCount: 0,
+                totalCount: 0,
+                accuracy: 0,
+                rootNote: '',
+                scaleType: '',
+                chordType: '',
+                currentIntervals: [],
+                currentSequence: [],
+                currentStep: 0,
+                correctPositions: [],
+                isAnswered: false,
+                timeoutId: null,
+                maxFret: 12,
+                previousMaxFret: 12,
+                isRecording: false,
+                sensitivity: 0.5,
+                confidenceThreshold: 0.5, // 降低置信度阈值以提高检测灵敏度
+                noiseLevel: 0.001,
+                minVolume: 0.001,
+                microphoneInitialized: false,
+                pitchBuffer: [],
+                bufferSize: 3, // 减少缓冲区大小以加快响应
+                zeroCrossingThreshold: 0.1,
+                harmonicWeights: [1.0, 0.8, 0.6],
+                nextExerciseInfo: '', // 下一个练习的显示信息
+                nextExerciseIntervals: [], // 下一个练习的音程序列
+                metronomeEnabled: false, // 节拍器是否启用
+                metronomeTempo: 40, // 节拍器速度 (BPM)
+                metronomeInterval: null // 节拍器定时器
+            };
+            
+            // 启动麦克风录音
+            function startRecording() {
+                if (isRecording) return;
+                
+                try {
+                    // 如果已经初始化过麦克风，直接重用
+                    if (state.microphoneInitialized && mediaStream) {
+                        if (!audioContext) {
+                            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        }
+                        
+                        analyser = audioContext.createAnalyser();
+                        analyser.fftSize = 4096;
+                        
+                        javascriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+                        javascriptNode.onaudioprocess = processAudio;
+                        
+                        microphone = audioContext.createMediaStreamSource(mediaStream);
+                        microphone.connect(analyser);
+                        analyser.connect(javascriptNode);
+                        javascriptNode.connect(audioContext.destination);
+                        
+                        isRecording = true;
+                        return;
+                    }
+                    
+                    // 创建音频上下文
+                    if (!audioContext) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 4096;
+                    
+                    // 创建脚本处理节点
+                    javascriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+                    
+                    // 设置音频处理
+                    javascriptNode.onaudioprocess = processAudio;
+                    
+                    // 获取麦克风输入
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(function(stream) {
+                            mediaStream = stream;
+                            microphone = audioContext.createMediaStreamSource(stream);
+                            microphone.connect(analyser);
+                            analyser.connect(javascriptNode);
+                            javascriptNode.connect(audioContext.destination);
+                            
+                            isRecording = true;
+                            state.microphoneInitialized = true;
+                        })
+                        .catch(function(err) {
+                            console.error('麦克风获取失败:', err);
+                        });
+                } catch (e) {
+                    console.error('音频初始化失败:', e);
+                }
+            }
+            
+            // 停止麦克风录音
+            function stopRecording() {
+                if (!isRecording) return;
+                
+                if (javascriptNode) {
+                    javascriptNode.disconnect();
+                }
+                if (analyser) {
+                    analyser.disconnect();
+                }
+                if (microphone) {
+                    microphone.disconnect();
+                }
+                
+                isRecording = false;
+            }
+            
+            // 完全关闭麦克风（退出应用时使用）
+            function closeMicrophone() {
+                stopRecording();
+                
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+                
+                if (audioContext) {
+                    audioContext.close();
+                    audioContext = null;
+                }
+                
+                state.microphoneInitialized = false;
+            }
+            
+            // 处理音频数据
+            function processAudio(event) {
+                if (!isRecording || state.isAnswered) return;
+                
+                const inputData = event.inputBuffer.getChannelData(0);
+                const sampleRate = audioContext.sampleRate;
+                
+                // 使用PitchFinder库的YIN算法检测音高
+                const detectPitch = Pitchfinder.YIN({ threshold: 0.1 });
+                const pitch = detectPitch(inputData);
+                
+                // 计算置信度 (PitchFinder不直接提供置信度，我们基于信号强度估算)
+                const signalStrength = calculateSignalStrength(inputData);
+                const confidence = Math.min(1.0, signalStrength * 5); // 将信号强度转换为0-1范围的置信度
+                
+                if (pitch && pitch > 0 && confidence >= state.confidenceThreshold) {
+                    // 应用加权移动平均滤波
+                    state.pitchBuffer.push(pitch);
+                    if (state.pitchBuffer.length > state.bufferSize) {
+                        state.pitchBuffer.shift();
+                    }
+                    
+                    // 计算加权平均值
+                    let weightedSum = 0;
+                    let weightSum = 0;
+                    for (let i = 0; i < state.pitchBuffer.length; i++) {
+                        const weight = i + 1;
+                        weightedSum += state.pitchBuffer[i] * weight;
+                        weightSum += weight;
+                    }
+                    const smoothedPitch = weightedSum / weightSum;
+                    
+                    // 检查是否匹配当前步骤的音高
+                    checkPitchMatch(smoothedPitch, confidence);
+                }
+            }
+            
+            // 计算信号强度作为置信度的估计
+            function calculateSignalStrength(buffer) {
+                let sum = 0;
+                for (let i = 0; i < buffer.length; i++) {
+                    sum += Math.abs(buffer[i]);
+                }
+                const average = sum / buffer.length;
+                return Math.min(1.0, average * 10); // 将平均振幅转换为0-1范围
+            }
+            
+            // 频率转换为音符名称和八度
+            function frequencyToNoteName(frequency) {
+                const A4 = 440;
+                const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+                
+                // 计算半音距离
+                const noteNum = 12 * (Math.log2(frequency / A4)) + 69;
+                const noteIndex = Math.round(noteNum) % 12;
+                const octave = Math.floor(noteNum / 12) - 1;
+                
+                return {
+                    name: noteNames[noteIndex],
+                    octave: octave
+                };
+            }
+            
+            // 计算谐波权重
+            function getHarmonicWeight(detectedFreq, rootFreq) {
+                const rootValue = noteToSemitones[rootFreq];
+                const detectedNote = frequencyToNoteName(detectedFreq);
+                const semitoneDiff = Math.abs(noteToSemitones[detectedNote.name] - rootValue) % 12;
+                
+                // 检查是否是基频或主要谐波
+                if (semitoneDiff === 0) return state.harmonicWeights[0]; // 基频
+                if ([7, 12].includes(semitoneDiff)) return state.harmonicWeights[1]; // 五度/八度
+                if ([4, 9].includes(semitoneDiff)) return state.harmonicWeights[2]; // 大三度/六度
+                
+                return 0; // 忽略其他谐波
+            }
+            
+            // 检查信号周期性（通过过零率）
+            function isPeriodicSignal(buffer) {
+                let zeroCrossings = 0;
+                for (let i = 1; i < buffer.length; i++) {
+                    if (buffer[i-1] * buffer[i] < 0) {
+                        zeroCrossings++;
+                    }
+                }
+                const zeroCrossingRate = zeroCrossings / buffer.length;
+                return zeroCrossingRate > state.zeroCrossingThreshold;
+            }
+
+            // 检查检测到的音高是否匹配当前步骤的目标音高
+            function checkPitchMatch(detectedPitch, confidence) {
+                if (state.isAnswered || confidence < state.confidenceThreshold) return;
+                
+                const currentInterval = state.currentSequence[state.currentStep];
+                const rootValue = noteToSemitones[state.rootNote];
+                const targetSemitone = (rootValue + intervalToSemitones[currentInterval]) % 12;
+                
+                // 计算目标频率（中央C附近的频率）
+                const targetFrequency = 440 * Math.pow(2, (targetSemitone - 9) / 12);
+                
+                // 计算音分差（1半音 = 100音分）
+                const cents = 1200 * Math.log2(detectedPitch / targetFrequency);
+                
+                // 更新实时音高显示
+                updatePitchDisplay(detectedPitch, cents, confidence);
+                
+                // 检查是否在允许的误差范围内（±20音分）
+                // 处理八度问题，任何八度的正确音高都应该被接受
+                const centsMod = Math.abs(cents) % 1200;
+                const adjustedCents = centsMod > 600 ? 1200 - centsMod : centsMod;
+                
+                if (adjustedCents <= 20) {
+                    // 正确匹配
+                    handleCorrectAnswer();
+                }
+            }
+            
+            // 更新实时音高显示
+            function updatePitchDisplay(frequency, cents, confidence) {
+                const pitchDisplay = document.getElementById('pitchDisplay');
+                if (!pitchDisplay) return;
+                
+                const note = frequencyToNoteName(frequency);
+                const centsMod = cents % 1200;
+                const adjustedCents = centsMod > 600 ? centsMod - 1200 : centsMod;
+                
+                pitchDisplay.innerHTML = `
+                    <div>音高: ${note.name}${note.octave} (${Math.round(frequency)}Hz)</div>
+                    <div>音分差: ${adjustedCents > 0 ? '+' : ''}${Math.round(adjustedCents)}</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${Math.round(confidence * 100)}%"></div>
+                    </div>
+                `;
+                
+                // 根据音分差设置颜色
+                if (Math.abs(adjustedCents) <= 20) {
+                    pitchDisplay.classList.add('in-tune');
+                    pitchDisplay.classList.remove('out-of-tune');
+                } else {
+                    pitchDisplay.classList.add('out-of-tune');
+                    pitchDisplay.classList.remove('in-tune');
+                }
+            }
+            
+            // 处理正确答案
+            function handleCorrectAnswer() {
+                // 标记当前步骤为已播放
+                const sequenceItems = document.querySelectorAll('.sequence-item');
+                if (sequenceItems[state.currentStep]) {
+                    sequenceItems[state.currentStep].classList.remove('current');
+                    sequenceItems[state.currentStep].classList.add('played');
+                }
+                
+                // 更新状态
+                state.correctCount++;
+                state.totalCount++;
+                state.score += 10;
+                state.currentStep++;
+                
+                // 检查是否完成所有步骤
+                if (state.currentStep >= state.currentSequence.length) {
+                    // 完成练习
+                    state.isAnswered = true;
+                    
+                    // 极短延迟后生成新练习，保持麦克风持续运行
+                    setTimeout(() => {
+                        // 保留音高缓冲区内容，保持识别连续性
+                        // 仅重置必要的练习状态
+                        state.currentStep = 0;
+                        state.isAnswered = false;
+                        
+                        // 生成新练习
+                        generateExercise();
+                    }, 300); // 缩短延迟到300ms
+                } else {
+                    // 高亮显示下一个步骤
+                    if (sequenceItems[state.currentStep]) {
+                        sequenceItems[state.currentStep].classList.add('current');
+                    }
+                }
+            }
+            
+            // 预生成下一个练习
+            function generateNextExercise() {
+                // 获取当前激活的选项卡
+                const activeTab = document.querySelector('.settings-tab.active').dataset.tab;
+                
+                if (activeTab === 'scale') {
+                    // 确定根音
+                    let rootNote = rootNoteEl.value;
+                    if (rootNote === 'random') {
+                        const notes = Object.keys(noteToSemitones).filter(n => n.length <= 2 && n !== 'D♭' && n !== 'E♭' && n !== 'G♭' && n !== 'A♭' && n !== 'B♭');
+                        rootNote = notes[Math.floor(Math.random() * notes.length)];
+                    }
+                    
+                    // 确定调式
+                    let scaleType = scaleTypeEl.value;
+                    if (scaleType === 'random') {
+                        const types = Object.keys(scaleTypes);
+                        scaleType = types[Math.floor(Math.random() * types.length)];
+                    }
+                    
+                    // 确定顺序
+                    const activeOrderBtn = document.querySelector('.scale-order-btn.active');
+                    const order = activeOrderBtn ? activeOrderBtn.dataset.value : 'ordered';
+                    
+                    // 获取音程序列
+                    let intervals = [...scaleTypes[scaleType].intervals];
+                    if (order === 'random') {
+                        // 打乱顺序，但保持第一个音是主音
+                        const firstInterval = intervals[0];
+                        const otherIntervals = intervals.slice(1);
+                        for (let i = otherIntervals.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [otherIntervals[i], otherIntervals[j]] = [otherIntervals[j], otherIntervals[i]];
+                        }
+                        intervals = [firstInterval, ...otherIntervals];
+                    }
+                    
+                    // 保存下一个练习信息
+                    state.nextExerciseInfo = `${rootNote} ${scaleTypes[scaleType].name}`;
+                    state.nextExerciseIntervals = intervals;
+                } else {
+                    // 确定根音
+                    let rootNote = chordRootNoteEl.value;
+                    if (rootNote === 'random') {
+                        const notes = Object.keys(noteToSemitones).filter(n => n.length <= 2 && n !== 'D♭' && n !== 'E♭' && n !== 'G♭' && n !== 'A♭' && n !== 'B♭');
+                        rootNote = notes[Math.floor(Math.random() * notes.length)];
+                    }
+                    
+                    // 确定和弦类型
+                    const activeChordTypes = document.querySelectorAll('.chord-type-btn.active');
+                    let chordType = 'major';
+                    if (activeChordTypes.length > 0) {
+                        const selectedChordTypes = Array.from(activeChordTypes).map(btn => btn.dataset.value);
+                        chordType = selectedChordTypes[Math.floor(Math.random() * selectedChordTypes.length)];
+                    }
+                    
+                    // 确定顺序
+                    const activeOrderBtn = document.querySelector('.chord-order-btn.active');
+                    const order = activeOrderBtn ? activeOrderBtn.dataset.value : 'ordered';
+                    
+                    // 获取音程序列
+                    let intervals = [...chordTypes[chordType].intervals];
+                    if (order === 'random') {
+                        // 打乱顺序
+                        for (let i = intervals.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [intervals[i], intervals[j]] = [intervals[j], intervals[i]];
+                        }
+                    }
+                    
+                    // 生成和弦符号
+                    const chordSymbol = chordType === 'major' ? '' : 
+                                      chordType === 'minor' ? 'm' : 
+                                      chordType === 'dominant7' ? '7' : 
+                                      chordType === 'major7' ? 'maj7' : 
+                                      chordType === 'minor7' ? 'm7' : 
+                                      chordType === 'minor7b5' ? 'm7♭5' :
+                                      chordType === 'dominant9' ? '9' :
+                                      chordType === 'major9' ? 'maj9' :
+                                      chordType === 'minor9' ? 'm9' :
+                                      chordType === 'sus2' ? 'sus2' : 'sus4';
+                    
+                    // 保存下一个练习信息
+                    state.nextExerciseInfo = `${rootNote}${chordSymbol}`;
+                    state.nextExerciseIntervals = intervals;
+                }
+                
+                // 更新显示
+                updateNextExerciseDisplay();
+            }
+            
+            // 更新下一个练习显示
+            function updateNextExerciseDisplay() {
+                if (state.nextExerciseInfo && state.nextExerciseIntervals.length > 0) {
+                    nextExerciseEl.innerHTML = `${state.nextExerciseInfo}<br><span style="font-size: 14px; color: #94a3b8;">${state.nextExerciseIntervals.join(' ')}</span>`;
+                }
+            }
+            
+            // 生成新的练习题目
+            function generateExercise() {
+                // 清空音高缓冲区
+                state.pitchBuffer = [];
+                
+                state.isAnswered = false;
+                state.currentStep = 0;
+                
+                if (state.timeoutId) {
+                    clearTimeout(state.timeoutId);
+                    state.timeoutId = null;
+                }
+                
+                // 使用预生成的下一个练习
+                if (state.nextExerciseInfo && state.nextExerciseIntervals.length > 0) {
+                    const activeTab = document.querySelector('.settings-tab.active').dataset.tab;
+                    
+                    if (activeTab === 'scale') {
+                        // 解析音阶信息
+                        const parts = state.nextExerciseInfo.split(' ');
+                        state.rootNote = parts[0];
+                        state.scaleType = Object.keys(scaleTypes).find(key => scaleTypes[key].name === parts[1]);
+                        state.currentIntervals = [...state.nextExerciseIntervals];
+                        targetIntervalEl.textContent = state.nextExerciseInfo;
+                    } else {
+                        // 解析和弦信息
+                        const chordMatch = state.nextExerciseInfo.match(/([A-G][♯♭]?)(.*)/);
+                        state.rootNote = chordMatch[1];
+                        
+                        // 根据和弦符号确定和弦类型
+                        const chordSymbol = chordMatch[2];
+                        state.chordType = chordSymbol === '' ? 'major' : 
+                                         chordSymbol === 'm' ? 'minor' : 
+                                         chordSymbol === '7' ? 'dominant7' : 
+                                         chordSymbol === 'maj7' ? 'major7' : 
+                                         chordSymbol === 'm7' ? 'minor7' : 
+                                         chordSymbol === 'sus2' ? 'sus2' : 'sus4';
+                                         
+                        state.currentIntervals = [...state.nextExerciseIntervals];
+                        targetIntervalEl.textContent = state.nextExerciseInfo;
+                    }
+                    
+                    // 显示序列
+                    displaySequence();
+                } else {
+                    // 没有预生成的练习，生成新的
+                    const activeTab = document.querySelector('.settings-tab.active').dataset.tab;
+                    if (activeTab === 'scale') {
+                        generateScaleExercise();
+                    } else {
+                        generateChordExercise();
+                    }
+                }
+                
+                // 预生成下一个练习
+                generateNextExercise();
+            }
+            
+            // 生成音阶练习
+            function generateScaleExercise() {
+                // 确定根音
+                let rootNote = rootNoteEl.value;
+                if (rootNote === 'random') {
+                    const notes = Object.keys(noteToSemitones).filter(n => n.length <= 2 && n !== 'D♭' && n !== 'E♭' && n !== 'G♭' && n !== 'A♭' && n !== 'B♭');
+                    rootNote = notes[Math.floor(Math.random() * notes.length)];
+                }
+                state.rootNote = rootNote;
+                
+                // 确定调式
+                let scaleType = scaleTypeEl.value;
+                if (scaleType === 'random') {
+                    const types = Object.keys(scaleTypes);
+                    scaleType = types[Math.floor(Math.random() * types.length)];
+                }
+                state.scaleType = scaleType;
+                
+                // 获取音阶音程
+                state.currentIntervals = [...scaleTypes[scaleType].intervals];
+                
+                // 确定顺序
+                const activeScaleOrderBtn = document.querySelector('.scale-order-btn.active');
+                const order = activeScaleOrderBtn ? activeScaleOrderBtn.dataset.value : 'ordered';
+                if (order === 'random') {
+                    // 打乱音阶顺序，但保持第一个音是主音
+                    const firstInterval = state.currentIntervals[0];
+                    const otherIntervals = state.currentIntervals.slice(1);
+                    for (let i = otherIntervals.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [otherIntervals[i], otherIntervals[j]] = [otherIntervals[j], otherIntervals[i]];
+                    }
+                    state.currentIntervals = [firstInterval, ...otherIntervals];
+                }
+                
+                // 设置显示标题
+                targetIntervalEl.textContent = `${rootNote} ${scaleTypes[scaleType].name}`;
+                
+                // 显示音阶序列
+                displaySequence();
+            }
+            
+            // 生成和弦练习
+            function generateChordExercise() {
+                // 确定根音
+                let rootNote = chordRootNoteEl.value;
+                if (rootNote === 'random') {
+                    const notes = Object.keys(noteToSemitones).filter(n => n.length <= 2 && n !== 'D♭' && n !== 'E♭' && n !== 'G♭' && n !== 'A♭' && n !== 'B♭');
+                    rootNote = notes[Math.floor(Math.random() * notes.length)];
+                }
+                state.rootNote = rootNote;
+                
+                // 确定和弦类型
+                const activeChordTypes = document.querySelectorAll('.chord-type-btn.active');
+                if (activeChordTypes.length === 0) {
+                    // 如果没有选择任何和弦类型，默认选择大三和弦
+                    state.chordType = 'major';
+                } else {
+                    const selectedChordTypes = Array.from(activeChordTypes).map(btn => btn.dataset.value);
+                    state.chordType = selectedChordTypes[Math.floor(Math.random() * selectedChordTypes.length)];
+                }
+                
+                // 获取和弦音程
+                state.currentIntervals = [...chordTypes[state.chordType].intervals];
+                
+                // 确定顺序
+                const activeChordOrderBtn = document.querySelector('.chord-order-btn.active');
+                const order = activeChordOrderBtn ? activeChordOrderBtn.dataset.value : 'ordered';
+                if (order === 'random') {
+                    // 打乱和弦音顺序
+                    for (let i = state.currentIntervals.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [state.currentIntervals[i], state.currentIntervals[j]] = [state.currentIntervals[j], state.currentIntervals[i]];
+                    }
+                }
+                
+                // 设置显示标题
+                const chordSymbol = `${rootNote}${state.chordType === 'major' ? '' : state.chordType === 'minor' ? 'm' : state.chordType === 'dominant7' ? '7' : state.chordType === 'major7' ? 'maj7' : state.chordType === 'minor7' ? 'm7' : state.chordType === 'sus2' ? 'sus2' : 'sus4'}`;
+                targetIntervalEl.textContent = chordSymbol;
+                
+                // 显示和弦序列
+                displaySequence();
+            }
+            
+            // 显示音阶/和弦序列
+            function displaySequence() {
+                sequenceDisplayEl.innerHTML = '';
+                state.currentSequence = [];
+                
+                state.currentIntervals.forEach((interval, index) => {
+                    const span = document.createElement('div');
+                    span.className = 'sequence-item';
+                    if (index === 0) span.classList.add('current');
+                    span.textContent = interval;
+                    span.dataset.index = index;
+                    sequenceDisplayEl.appendChild(span);
+                    state.currentSequence.push(interval);
+                });
+            }
+            
+            // 启动节拍器
+            function startMetronome() {
+                if (state.metronomeInterval) {
+                    stopMetronome(); // 确保先停止之前的节拍器
+                }
+                
+                if (!state.metronomeEnabled) return;
+                
+                // 计算节拍间隔（毫秒）
+                const beatInterval = 60000 / state.metronomeTempo;
+                
+                // 设置CSS变量以控制闪烁速度
+                document.documentElement.style.setProperty('--metronome-speed', `${beatInterval}ms`);
+                
+                // 添加闪烁动画类
+                if (practiceScreen.style.display === 'flex') {
+                    practiceScreen.classList.add('metronome-active');
+                }
+                
+                // 启动节拍器定时器
+                state.metronomeInterval = setInterval(() => {
+                    // 这里可以添加声音效果（如果需要）
+                }, beatInterval);
+            }
+            
+            // 停止节拍器
+            function stopMetronome() {
+                if (state.metronomeInterval) {
+                    clearInterval(state.metronomeInterval);
+                    state.metronomeInterval = null;
+                }
+                
+                // 移除闪烁动画类
+                practiceScreen.classList.remove('metronome-active');
+            }
+            
+            // 初始化事件监听器
+            function initEventListeners() {
+                // 节拍器开关事件
+                metronomeToggleEl.addEventListener('change', function() {
+                    state.metronomeEnabled = this.checked;
+                    if (state.metronomeEnabled && practiceScreen.style.display === 'flex') {
+                        startMetronome();
+                    } else {
+                        stopMetronome();
+                    }
+                });
+                
+                // 节拍器速度滑块事件
+                metronomeTempoEl.addEventListener('input', function() {
+                    state.metronomeTempo = parseInt(this.value);
+                    metronomeTempoValueEl.textContent = state.metronomeTempo;
+                    
+                    // 如果节拍器正在运行，重新启动以应用新速度
+                    if (state.metronomeEnabled && state.metronomeInterval) {
+                        startMetronome();
+                    }
+                });
+                
+                // 开始练习按钮
+                startBtn.addEventListener('click', function() {
+                    // 显示加载状态
+                    updateStatusIndicator('正在启动麦克风...', 'recording');
+                    
+                    setTimeout(() => {
+                        // 隐藏主屏幕，显示练习屏幕和音高显示
+                        mainScreen.style.display = 'none';
+                        practiceScreen.style.display = 'flex';
+                        document.getElementById('pitchDisplay').style.display = 'block';
+                        
+                        // 请求屏幕唤醒锁
+                        requestWakeLock();
+                        
+                        // 重置状态
+                        state.nextExerciseInfo = '';
+                        state.nextExerciseIntervals = [];
+                        
+                        // 生成第一个练习
+                        generateExercise();
+                        
+                        // 启动麦克风
+                        startRecording();
+                        
+                        // 如果节拍器已启用，则启动节拍器
+                        if (state.metronomeEnabled) {
+                            startMetronome();
+                        }
+                        
+                        updateStatusIndicator('录音中...', 'recording');
+                    }, 500);
+                });
+                
+                // 选项卡切换
+                settingsTabs.forEach(tab => {
+                    tab.addEventListener('click', function() {
+                        const tabName = this.dataset.tab;
+                        
+                        // 更新激活的选项卡
+                        settingsTabs.forEach(t => t.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // 显示对应的设置内容
+                        if (tabName === 'scale') {
+                            scaleSettings.style.display = 'block';
+                            chordSettings.style.display = 'none';
+                        } else {
+                            scaleSettings.style.display = 'none';
+                            chordSettings.style.display = 'block';
+                        }
+                    });
+                });
+                
+                // 和弦类型按钮点击事件
+                chordTypeBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        this.classList.toggle('active');
+                        
+                        // 更新下一个练习信息
+                        generateNextExerciseInfo();
+                    });
+                });
+                
+                // 音阶顺序按钮点击事件
+                const scaleOrderBtns = document.querySelectorAll('.scale-order-btn');
+                scaleOrderBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        // 移除所有按钮的激活状态
+                        scaleOrderBtns.forEach(b => b.classList.remove('active'));
+                        // 激活当前按钮
+                        this.classList.add('active');
+                    });
+                });
+                
+                // 和弦顺序按钮点击事件
+                const chordOrderBtns = document.querySelectorAll('.chord-order-btn');
+                chordOrderBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        // 移除所有按钮的激活状态
+                        chordOrderBtns.forEach(b => b.classList.remove('active'));
+                        // 激活当前按钮
+                        this.classList.add('active');
+                    });
+                });
+                
+                // 点击练习屏幕返回主页面
+                practiceScreen.addEventListener('click', function() {
+                    // 显示加载状态
+                    updateStatusIndicator('正在停止录音...', 'ready');
+                    
+                    setTimeout(() => {
+                        // 停止麦克风
+                        stopRecording();
+                        
+                        // 停止节拍器
+                        stopMetronome();
+                        
+                        // 释放屏幕唤醒锁
+                        releaseWakeLock();
+                        
+                        // 隐藏练习屏幕和音高显示，显示主屏幕
+                        practiceScreen.style.display = 'none';
+                        document.getElementById('pitchDisplay').style.display = 'none';
+                        mainScreen.style.display = 'block';
+                        
+                        updateStatusIndicator('准备就绪', 'ready');
+                    }, 300);
+                });
+                
+                // 页面关闭时完全关闭麦克风
+                window.addEventListener('beforeunload', function() {
+                    closeMicrophone();
+                });
+            }
+            
+            // 初始化应用
+            function initApp() {
+                // 检查PitchFinder库是否加载成功
+                if (typeof Pitchfinder === 'undefined') {
+                    console.error('PitchFinder库加载失败，请检查网络连接');
+                    alert('音高检测库加载失败，请检查网络连接后刷新页面');
+                } else {
+                    console.log('PitchFinder库加载成功');
+                }
+                
+                initEventListeners();
+                initKeyboardShortcuts();
+            }
+            
+            // 初始化键盘快捷键
+            function initKeyboardShortcuts() {
+                document.addEventListener('keydown', function(e) {
+                    // ESC键返回主菜单
+                    if (e.key === 'Escape' && practiceScreen.style.display === 'flex') {
+                        practiceScreen.click();
+                    }
+                    
+                    // 空格键重新开始当前练习
+                    if (e.key === ' ' && practiceScreen.style.display === 'flex') {
+                        generateExercise();
+                    }
+                });
+            }
+            
+            // 更新状态指示器
+            function updateStatusIndicator(status, type = 'ready') {
+                statusIndicator.textContent = status;
+                statusIndicator.className = `status-indicator status-${type}`;
+            }
+            
+            // 启动应用
+            initApp();
+        });
+    </script>
+</body>
+</html>
