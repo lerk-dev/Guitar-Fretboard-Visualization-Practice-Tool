@@ -1,0 +1,3164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>吉他指板视觉化练习工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', 'Segoe UI', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a1a, #0d1b2a);
+            color: #fff;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background-color: rgba(45, 45, 45, 0.95);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(8px);
+            margin-top: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 152, 0, 0.3);
+            padding-bottom: 8px;
+        }
+        
+        h1 {
+            color: #ff9800;
+            margin-bottom: 6px;
+            font-size: 22px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .instructions {
+            color: #b0b0b0;
+            font-size: 13px;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+        
+        /* 设置面板样式 */
+        .settings-panel {
+            background-color: #333;
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 8px;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .settings-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .settings-label {
+            font-size: 12px;
+            color: #b0b0b0;
+            white-space: nowrap;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 3px;
+        }
+        
+        .btn-mode, .btn-range, .btn-practice, .btn-input {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            background-color: #444;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-mode.active, .btn-range.active, .btn-practice.active, .btn-input.active {
+            background-color: #4fc3f7;
+            color: #fff;
+        }
+        
+        select, input {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            background-color: #444;
+            color: #fff;
+            font-size: 12px;
+            min-width: 100px;
+        }
+        
+        /* 练习信息区 */
+        .exercise-info {
+            background-color: #333;
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .target-interval {
+            font-size: 26px;
+            font-weight: bold;
+            color: #4fc3f7;
+            margin: 6px 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .scale-sequence {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff9800;
+            margin: 6px 0;
+            min-height: 24px;
+        }
+        
+        .scale-note {
+            display: inline-block;
+            margin: 0 3px;
+            transition: color 0.1s; /* 加快变灰过渡 */
+        }
+        
+        .scale-note.played {
+            color: #888;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 0px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 13px;
+            font-weight: bold;
+            color: #ff9800;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #b0b0b0;
+        }
+        
+        /* 指板样式 */
+        .fretboard-container {
+            position: relative;
+            width: 100%;
+            height: 180px;
+            background-color: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 5px;
+            transition: display 0.3s;
+        }
+        
+        .fretboard {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .string {
+            flex: 1;
+            display: flex;
+            position: relative;
+            border-bottom: 1px solid #444;
+        }
+        
+        .string:last-child {
+            border-bottom: none;
+        }
+        
+        .fret {
+            flex: 1;
+            position: relative;
+            border-right: 1px solid #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .fret:last-child {
+            border-right: none;
+        }
+        
+        .fret:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .fret[data-fret="0"] {
+            background-color: #5556;
+        }
+        
+        .fret-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 10;
+            background: transparent;
+            color: #fff;
+        }
+        
+        .interval-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 13px;
+            color: #ff9800;
+            font-weight: bold;
+        }
+        
+        .fret-numbers {
+            display: flex;
+            width: 100%;
+            height: 20px;
+            margin-top: 3px;
+            transition: display 0.3s;
+        }
+        
+        .fret-number {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #b0b0b0;
+            font-size: 11px;
+            background: transparent;
+        }
+        
+        .fret.active {
+            background-color: rgba(156, 160, 163, 0.24);
+        }
+        
+        /* 反馈与控制按钮 */
+        .feedback {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            min-height: 22px;
+            margin-top: 6px;
+            margin-bottom: 6px;
+        }
+        
+        .correct {
+            color: #4caf50;
+        }
+        
+        .incorrect {
+            color: #f44336;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        
+        .btn {
+            padding: 7px 14px;
+            border: none;
+            border-radius: 8px;
+            background-color:transparent;
+            color: #fff;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:hover {
+            background-color: #29b6f6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-reset {
+            background-color: transparent;
+        }
+        
+        .btn-reset:hover {
+            background-color: #e53935;
+        }
+        
+        /* 全屏练习样式 */
+        #practiceScreen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a1a, #0d1b2a);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+        
+        .fullscreen-container {
+            width: 100%;
+            max-width: 800px;
+            background-color: rgba(45, 45, 45, 0.95);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .auto-next-indicator {
+            position: relative;
+            display: inline-block;
+            margin-left: auto;
+            margin-right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #4caf50;
+            padding: 6px 10px;
+            border-radius: 18px;
+            font-size: 11px;
+            display: none;
+        }
+        
+        /* 弹奏拾音下的内容样式 */
+        .microphone-mode-content {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .exercise-details {
+            padding: 12px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        
+        .next-exercise-label {
+            font-size: 14px;
+            color: #ffffff;
+            margin-bottom: 15px;
+            opacity: 0.8;
+        }
+        
+        .exercise-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #ff9800;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .exercise-intervals {
+            font-size: 14px;
+            color: #aaaaaa;
+            font-weight: normal;
+        }
+        
+        .fretboard-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+            transition: display 0.3s;
+        }
+        
+        /* 全屏弹奏拾音隐藏指板 */
+        .fullscreen-mic-hide .fretboard-container,
+        .fullscreen-mic-hide .fret-numbers,
+        .fullscreen-mic-hide .fretboard-footer {
+            display: none;
+        }
+        
+        /* 响应式优化 */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .container, .fullscreen-container {
+                padding: 6px;
+            }
+            
+            .fretboard-container {
+                height: 130px;
+            }
+            
+            .target-interval {
+                font-size: 22px;
+            }
+            
+            .stat-value {
+                font-size: 16px;
+            }
+            
+            .feedback {
+                font-size: 14px;
+                min-height: 18px;
+                margin: 0px 0;
+            }
+            
+            .btn {
+                padding: 5px 10px;
+                font-size: 12px;
+            }
+        }
+        
+        /*自定义和弦进行样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 22px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 22px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #4caf50;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+        
+        .custom-chord-add {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .custom-chord-list {
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 8px;
+        }
+        
+        #customChordSequence {
+            max-height: 150px;
+            overflow-y: auto;
+            margin: 8px 0;
+            padding: 8px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+        
+        .chord-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            border-left: 3px solid #4fc3f7;
+        }
+        
+        .chord-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .chord-name {
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .remove-chord {
+            background: none;
+            border: none;
+            color: #f44336;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        
+        .remove-chord:hover {
+            background-color: rgba(244, 67, 54, 0.1);
+        }
+        
+        .custom-chord-actions {
+            margin-top: 8px;
+            text-align: right;
+        }
+        
+        #addCustomChord, #clearCustomChords {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s;
+        }
+        
+        #addCustomChord:hover, #clearCustomChords:hover {
+            background-color: #45a049;
+        }
+        
+        #clearCustomChords {
+            background-color: #f44336;
+        }
+        
+        #clearCustomChords:hover {
+            background-color: #d32f2f;
+        }
+        
+        @media (max-width: 480px) {
+            .settings-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .settings-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            select {
+                width: 100%;
+            }
+            
+            .custom-chord-add {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .custom-chord-add select {
+                width: 100%;
+                margin-bottom: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 主屏幕 -->
+    <div class="container" id="mainScreen">
+        <div class="header">
+            <h1>吉他指板视觉化练习工具</h1>
+            <div class="instructions">
+                可以选址点击页面中的指板进行纸面练习；也可以在吉他上弹奏自动识别音高进行练习
+                <!-- <div class="tooltip">
+                    <span class="help-icon">?</span>
+                    <span class="tooltiptext">按提示音阶/和弦顺序操作，正确点击或弹奏后自动进入下一步，完成后立即跳转下一题</span>
+                </div> -->
+            </div>
+        </div>
+        
+        <!-- 整合设置面板 -->
+        <div class="settings-panel">
+            <div class="settings-row">
+                <!-- 练习内容：音阶/和弦/乐曲 -->
+                <div class="settings-group">
+                    <span class="settings-label">练习内容:</span>
+                    <div class="btn-group">
+                        <button class="btn-practice" data-value="scale">音阶练习</button>
+                        <button class="btn-practice" data-value="chord">和弦练习</button>
+                        <button class="btn-practice" data-value="melody">乐曲练习</button>
+                    </div>
+                </div>
+                
+                <!-- 歌曲选择（默认隐藏） -->
+                <div class="settings-group" id="melodySelectionGroup" style="display: none;">
+                    <span class="settings-label">选择歌曲:</span>
+                    <select id="melodySelection">
+                        <option value="twinkle">小星星</option>
+                        <option value="mary">玛丽有只小羊羔</option>
+                        <option value="happyBirthday">生日快乐</option>
+                        <option value="jingleBells">铃儿响叮当</option>
+                        <option value="londonBridge">伦敦桥</option>
+                        <option value="yankeeDoodle">扬基杜德尔</option>
+                        <option value="rowRowRowYourBoat">划船歌</option>
+                        <option value="phoneCall">打电话</option>
+                        <option value="odeToJoy">欢乐颂</option>
+                        <option value="farewell">送别</option>
+                        <option value="晴天">周杰伦-晴天</option>
+                        <option value="blueLotus">许巍-蓝莲花</option>
+                        <option value="onceYou">许巍-曾经的你</option>
+                    </select>
+                </div>
+                
+                <!-- 联系方式：纸面练习/弹奏拾音 -->
+                <div class="settings-group">
+                    <span class="settings-label">练习方式:</span>
+                    <div class="btn-group">
+                        <button class="btn-input" data-value="click">纸面练习</button>
+                        <button class="btn-input" data-value="microphone">弹奏拾音</button>
+                    </div>
+                </div>
+                
+                <!-- 根音选择 -->
+                <div class="settings-group">
+                    <span class="settings-label">根音:</span>
+                    <select id="rootNote">
+                        <option value="C">C</option>
+                        <option value="C#">C♯/D♭</option>
+                        <option value="D">D</option>
+                        <option value="D#">D♯/E♭</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="F#">F♯/G♭</option>
+                        <option value="G">G</option>
+                        <option value="G#">G♯/A♭</option>
+                        <option value="A">A</option>
+                        <option value="A#">A♯/B♭</option>
+                        <option value="B">B</option>
+                        <option value="random" selected>随机</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="settings-row">
+                <!-- 音阶调式（默认显示） -->
+                <div class="settings-group" id="scaleModeGroup">
+                    <span class="settings-label">调式:</span>
+                    <select id="scaleMode">
+                        <option value="major">大调</option>
+                        <option value="minor">小调</option>
+                        <option value="pentatonicMajor">五声大调</option>
+                        <option value="pentatonicMinor">五声小调</option>
+                        <option value="blues">布鲁斯</option>
+                        <option value="dorian">多利亚</option>
+                        <option value="phrygian">弗利几亚</option>
+                        <option value="lydian">利底亚</option>
+                        <option value="mixolydian">混合利底亚</option>
+                        <option value="locrian">洛克利亚</option>
+                        <option value="random" selected>随机</option>
+                    </select>
+                </div>
+                
+                <!-- 和弦类型（默认隐藏） -->
+                <div class="settings-group" id="chordTypeGroup" style="display: none;">
+                    <span class="settings-label">和弦类型:</span>
+                    <select id="chordType">
+                        <option value="major">大三和弦</option>
+                        <option value="minor">小三和弦</option>
+                        <option value="dominant7">属七和弦</option>
+                        <option value="major7">大七和弦</option>
+                        <option value="minor7">小七和弦</option>
+                        <option value="sus2">挂二和弦</option>
+                        <option value="sus4">挂四和弦</option>
+                        <option value="diminished">减和弦</option>
+                        <option value="augmented">增和弦</option>
+                        <option value="random" selected>随机</option>
+                    </select>
+                </div>
+                
+                <!-- 和弦音选择（默认隐藏） -->
+                <div class="settings-group" id="chordIntervalsGroup" style="display: none;">
+                    <span class="settings-label">和弦音选择:</span>
+                    <select id="chordIntervals">
+                        <option value="all">全部音</option>
+                        <option value="root">仅根音</option>
+                        <option value="third">仅3音</option>
+                        <option value="fifth">仅5音</option>
+                        <option value="seventh">仅7音</option>
+                        <option value="root_third">根音+3音</option>
+                        <option value="root_fifth">根音+5音</option>
+                        <option value="root_third_fifth">根音+3音+5音</option>
+                    </select>
+                </div>
+                
+                <!--自定义和弦进行（默认隐藏） -->
+                <div class="settings-group" id="customChordsGroup" style="display: none;">
+                    <div class="settings-row">
+                        <span class="settings-label">自定义和弦:</span>
+                        <label class="switch">
+                            <input type="checkbox" id="useCustomChords">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    
+                    <div id="customChordsControls" style="display: none; margin-top: 10px;">
+                        <div class="custom-chord-add">
+                            <select id="customChordRoot">
+                                <option value="C">C</option>
+                                <option value="C#">C#</option>
+                                <option value="D">D</option>
+                                <option value="D#">D#</option>
+                                <option value="E">E</option>
+                                <option value="F">F</option>
+                                <option value="F#">F#</option>
+                                <option value="G">G</option>
+                                <option value="G#">G#</option>
+                                <option value="A">A</option>
+                                <option value="A#">A#</option>
+                                <option value="B">B</option>
+                            </select>
+                            <select id="customChordType">
+                                <option value="major">大三和弦</option>
+                                <option value="minor">小三和弦</option>
+                                <option value="dominant7">属七和弦</option>
+                                <option value="major7">大七和弦</option>
+                                <option value="minor7">小七和弦</option>
+                                <option value="sus2">挂二和弦</option>
+                                <option value="sus4">挂四和弦</option>
+                                <option value="diminished">减和弦</option>
+                                <option value="augmented">增和弦</option>
+                            </select>
+                            <button id="addCustomChord">添加和弦</button>
+                        </div>
+                        
+                        <div class="custom-chord-list">
+                            <div class="settings-label">自定义和弦进行:</div>
+                            <!-- 添加歌曲名输入框 -->
+                            <div class="sequence-name-input" style="margin-bottom: 8px;">
+                                <input type="text" id="sequenceName" placeholder="请输入歌曲名（可选）" style="width: 100%; height:25px;margin-top: 8px; padding: 4px; border: none; border-radius: 4px; background-color: rgba(255, 255, 255, 0.1); color: white;" />
+                            </div>
+                            <div id="customChordSequence"></div>
+                            <div class="custom-chord-actions">
+                                <button id="clearCustomChords">清空自定义和弦进行</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-row">
+                <!-- 顺序：顺序/乱序 -->
+                <div class="settings-group">
+                    <span class="settings-label">顺序:</span>
+                    <div class="btn-group">
+                        <button class="btn-mode" data-value="ordered">顺序</button>
+                        <button class="btn-mode" data-value="reverse">倒序</button>
+                        <button class="btn-mode" data-value="random">乱序</button>
+                    </div>
+                </div>
+                
+                <!-- 指板范围 -->
+                <div class="settings-group">
+                    <span class="settings-label">指板范围:</span>
+                    <div class="btn-group">
+                        <button class="btn-range" data-value="12">12品</button>
+                        <button class="btn-range" data-value="15">15品</button>
+                        <button class="btn-range" data-value="18">18品</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 练习信息区 -->
+        <div class="exercise-info">
+            <div class="target-interval" id="targetInterval"></div>
+            <div class="scale-sequence" id="scaleSequence"></div>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="score">0</div>
+                    <div class="stat-label">得分</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="correctCount">0</div>
+                    <div class="stat-label">正确</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalCount">0</div>
+                    <div class="stat-label">总数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="accuracy">0%</div>
+                    <div class="stat-label">准确率</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 指板容器 -->
+        <div class="fretboard-container" id="mainFretboardContainer">
+            <div class="fretboard" id="fretboard"></div>
+        </div>
+        <div class="fretboard-footer" id="mainFretboardFooter">
+            <div class="fret-numbers" id="fretNumbers"></div>
+            <div class="auto-next-indicator" id="autoNextIndicator">2秒后自动进入下一题</div>
+        </div>
+        
+        <!-- 反馈区 -->
+        <div class="feedback" id="feedback"></div>
+        
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="btn" id="startFullscreenBtn">全屏练习</button>
+            <button class="btn" id="nextBtn">下一题</button>
+            <button class="btn btn-reset" id="resetBtn">重置</button>
+        </div>
+    </div>
+    
+    <!-- 全屏练习屏幕 -->
+    <div id="practiceScreen">
+        <div class="fullscreen-container" id="fullscreenContentContainer">
+            <div class="header">
+                <h1>吉他指板视觉化练习工具</h1>
+                <div class="instructions">点击屏幕空白处退出全屏</div>
+            </div>
+            <!-- 同主屏幕练习内容 -->
+            <div class="exercise-info">
+                <div class="target-interval" id="fullscreenTargetInterval"></div>
+                <div class="scale-sequence" id="fullscreenScaleSequence"></div>
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="fullscreenScore">0</div>
+                        <div class="stat-label">得分</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="fullscreenCorrectCount">0</div>
+                        <div class="stat-label">正确</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="fullscreenTotalCount">0</div>
+                        <div class="stat-label">总数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="fullscreenAccuracy">0%</div>
+                        <div class="stat-label">准确率</div>
+                    </div>
+                </div>
+            </div>
+            <!-- 全屏指板容器（弹奏拾音下隐藏） -->
+            <div class="fretboard-container" id="fullscreenFretboardContainer">
+                <div class="fretboard" id="fullscreenFretboard"></div>
+            </div>
+            <div class="fretboard-footer" id="fullscreenFretboardFooter">
+                <div class="fret-numbers" id="fullscreenFretNumbers"></div>
+                <div class="auto-next-indicator" id="fullscreenAutoNextIndicator">2秒后自动进入下一题</div>
+            </div>
+            <div class="feedback" id="fullscreenFeedback"></div>
+            <!-- 常规控制按钮（点击模式下显示） -->
+            <div class="controls" id="fullscreenControls">
+                <button class="btn" id="fullscreenNextBtn">下一题</button>
+                <button class="btn btn-reset" id="fullscreenResetBtn">重置</button>
+            </div>
+            <!-- 弹奏拾音下的显示内容 -->
+            <div class="microphone-mode-content" id="fullscreenMicrophoneContent" style="display: none;">
+                <div class="exercise-details">
+                    <div class="next-exercise-label">下一个：</div>
+                    <div class="exercise-title" id="fullscreenExerciseTitle"></div>
+                    <div class="exercise-intervals" id="fullscreenExerciseIntervals"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+
+        // PitchFinder库内联代码 - 直接嵌入YIN算法实现
+        (function(global) {
+    // PitchFinder主对象
+    var Pitchfinder = {};
+    
+    // 完整的YIN算法实现
+    Pitchfinder.YIN = function(config) {
+        var DEFAULT_THRESHOLD = 0.15;
+        var SAMPLE_RATE = 44100;
+        
+        config = config || {};
+        var threshold = config.threshold || DEFAULT_THRESHOLD;
+        var sampleRate = config.sampleRate || SAMPLE_RATE;
+        
+        return function(float32AudioBuffer) {
+            var buffer = float32AudioBuffer;
+            var bufferLength = buffer.length;
+            
+            // 预处理：应用汉宁窗减少频谱泄漏
+            var windowedBuffer = new Float32Array(bufferLength);
+            for (var i = 0; i < bufferLength; i++) {
+                var hanning = 0.5 * (1 - Math.cos(2 * Math.PI * i / (bufferLength - 1)));
+                windowedBuffer[i] = buffer[i] * hanning;
+            }
+            
+            buffer = windowedBuffer;
+            
+            var yinBuffer = new Float32Array(Math.floor(bufferLength / 2));
+            
+            // 步骤1: 计算差函数
+            for (var tau = 0; tau < yinBuffer.length; tau++) {
+                yinBuffer[tau] = 0;
+                for (var i = 0; i < yinBuffer.length; i++) {
+                    var delta = buffer[i] - buffer[i + tau];
+                    yinBuffer[tau] += delta * delta;
+                }
+            }
+            
+            // 步骤2: 累积归一化差函数
+            yinBuffer[0] = 1;
+            var runningSum = 0;
+            for (var tau = 1; tau < yinBuffer.length; tau++) {
+                runningSum += yinBuffer[tau];
+                if (runningSum !== 0) {
+                    yinBuffer[tau] *= tau / runningSum;
+                } else {
+                    yinBuffer[tau] = 1;
+                }
+            }
+            
+            // 步骤3: 绝对阈值检测
+            var tau = 0;
+            for (var i = 2; i < yinBuffer.length; i++) {
+                if (yinBuffer[i] < threshold) {
+                    // 寻找局部最小值
+                    while (i + 1 < yinBuffer.length && yinBuffer[i + 1] < yinBuffer[i]) {
+                        i++;
+                    }
+                    tau = i;
+                    break;
+                }
+            }
+            
+            // 如果没有找到低于阈值的点，返回null
+            if (tau === 0 || tau >= yinBuffer.length - 1) {
+                return null;
+            }
+            
+            // 步骤4: 抛物线插值提高精度
+            var betterTau = tau;
+            if (tau > 1 && tau < yinBuffer.length - 1) {
+                var s0 = yinBuffer[tau - 1];
+                var s1 = yinBuffer[tau];
+                var s2 = yinBuffer[tau + 1];
+                var adjustment = (s2 - s0) / (2 * (2 * s1 - s2 - s0));
+                betterTau = tau + adjustment;
+            }
+            
+            // 计算频率
+            var frequency = sampleRate / betterTau;
+            
+            // 过滤不合理的频率值（吉他音域：E2=82.41Hz 到 E6=1318.51Hz）
+            if (frequency < 65 || frequency > 1400) {
+                return null;
+            }
+            
+            return frequency;
+        };
+    };
+    
+    // 将PitchFinder暴露给全局
+    global.Pitchfinder = Pitchfinder;
+})(window);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // ---------------------- 基础数据定义 ----------------------
+            // 吉他标准调弦（对应1弦到6弦）
+            const standardTuning = ['E', 'B', 'G', 'D', 'A', 'E'];
+            // 音级与半音映射
+            const intervalToSemitones = {
+                '1': 0, 'b2': 1, '2': 2, 'b3': 3, '3': 4, '4': 5,
+                '#4': 6, 'b5': 6, '5': 7, '#5': 8, 'b6': 8, '6': 9, 'b7': 10, '7': 11
+            };
+            // 音名与半音映射（C=0）
+            const noteToSemitones = {
+                'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 
+                'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 
+                'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+            };
+            // 常见乐曲旋律定义
+            const commonMelodies = {
+                'twinkle': {
+                    name: '小星星',
+                    intervals: ['1', '1', '5', '5', '6', '6', '5', '4', '4', '3', '3', '2', '2', '1']
+                },
+                'mary': {
+                    name: '玛丽有只小羊羔',
+                    intervals: ['3', '2', '1', '2', '3', '3', '3', '2', '2', '2', '3', '5', '5', '3', '2', '1', '2', '3', '3', '3', '3', '2', '2', '3', '2', '1']
+                },
+                'happyBirthday': {
+                    name: '生日快乐',
+                    intervals: ['5', '5', '6', '5', '1', '7', '5', '5', '6', '5', '2', '1', '5', '5', '5', '3', '1', '7', '6', '4', '4', '3', '1', '2', '1']
+                },
+                'jingleBells': {
+                    name: '铃儿响叮当',
+                    intervals: ['3', '3', '3', '3', '3', '3', '3', '5', '1', '2', '3', '4', '4', '4', '4', '3', '3', '3', '3', '3', '2', '2', '3', '2', '5', '3', '3', '3', '3', '3', '3', '3', '5', '1', '2', '3', '4', '4', '4', '4', '3', '3', '3', '3', '5', '5', '4', '2', '1']
+                },
+                'londonBridge': {
+                    name: '伦敦桥',
+                    intervals: ['3', '2', '1', '2', '3', '3', '3', '2', '2', '3', '2', '1']
+                },
+                'yankeeDoodle': {
+                    name: '扬基杜德尔',
+                    intervals: ['5', '5', '3', '5', '6', '5', '3', '5', '1', '1', '5', '5', '3', '5', '6', '5', '3', '5', '1', '6', '5', '3', '5', '1']
+                },
+                'rowRowRowYourBoat': {
+                    name: '划船歌',
+                    intervals: ['1', '1', '1', '2', '3', '3', '2', '3', '4', '5', '1', '1', '1', '2', '3', '3', '2', '3', '4', '5', '5', '5', '4', '4', '3', '3', '2', '2', '1']
+                },
+                'phoneCall': {
+                    name: '打电话',
+                    intervals: ['5', '5', '3', '5', '1', '6', '5', '1', '6', '5', '3', '3', '5', '3', '1', '5', '1', '6', '5']
+                },
+                'odeToJoy': {
+                    name: '欢乐颂',
+                    intervals: ['3', '3', '4', '5', '5', '4', '3', '2', '1', '1', '2', '3', '3', '2', '2', '3', '3', '4', '5', '5', '4', '3', '2', '1', '1', '2', '3', '2', '1', '1']
+                },
+                'farewell': {
+                    name: '送别',
+                    intervals: ['5', '3', '2', '1', '2', '3', '5', '1', '6', '5', '3', '5', '1', '6', '5', '3', '2', '1', '2', '3', '5', '1', '6', '5']
+                },
+                '晴天': {
+                    name: '周杰伦-晴天',
+                    intervals: ['2', '5', '5', '7', '1', '7', '6', '5', '6', '7', '7', '7', '7', '6', '7', '6', '5']
+                },
+                'blueLotus': {
+                    name: '许巍-蓝莲花',
+                    intervals: ['3', '5', '6', '5', '3', '5', '6', '5', '3', '5', '6', '5', '3', '5', '6', '5', '1', '2', '3', '2', '1', '2', '3', '2', '1', '2', '3', '2', '5', '6', '5', '3']
+                },
+                'onceYou': {
+                    name: '许巍-曾经的你',
+                    intervals: ['5', '3', '2', '1', '2', '3', '5', '3', '2', '1', '2', '3', '5', '3', '2', '1', '2', '3', '5', '3', '2', '1', '2', '3', '5', '3', '2', '1', '2', '3', '5', '3', '2', '1']
+                }
+            };
+            
+            // 调式定义
+            const scaleModes = {
+                'major': ['1', '2', '3', '4', '5', '6', '7'],
+                'minor': ['1', '2', 'b3', '4', '5', 'b6', 'b7'],
+                'pentatonicMajor': ['1', '2', '3', '5', '6'],
+                'pentatonicMinor': ['1', 'b3', '4', '5', 'b7'],
+                'blues': ['1', 'b3', '4', '#4', '5', 'b7'],
+                'dorian': ['1', '2', 'b3', '4', '5', '6', 'b7'],
+                'phrygian': ['1', 'b2', 'b3', '4', '5', 'b6', 'b7'],
+                'lydian': ['1', '2', '3', '#4', '5', '6', '7'],
+                'mixolydian': ['1', '2', '3', '4', '5', '6', 'b7'],
+                'locrian': ['1', 'b2', 'b3', '4', 'b5', 'b6', 'b7']
+            };
+            // 和弦定义
+            const chordTypes = {
+                'major': ['1', '3', '5'],
+                'minor': ['1', 'b3', '5'],
+                'dominant7': ['1', '3', '5', 'b7'],
+                'major7': ['1', '3', '5', '7'],
+                'minor7': ['1', 'b3', '5', 'b7'],
+                'sus2': ['1', '2', '5'],
+                'sus4': ['1', '4', '5'],
+                'diminished': ['1', 'b3', 'b5'],
+                'augmented': ['1', '3', '#5']
+            };
+            // 英文显示映射
+            const scaleModeEnglish = { 'major': 'Major', 'minor': 'Minor', 'pentatonicMajor': 'Major Pentatonic', 'pentatonicMinor': 'Minor Pentatonic', 'blues': 'Blues', 'dorian': 'Dorian', 'phrygian': 'Phrygian', 'lydian': 'Lydian', 'mixolydian': 'Mixolydian', 'locrian': 'Locrian' };
+            const chordTypeEnglish = { 'major': 'Major', 'minor': 'Minor', 'dominant7': 'Dominant 7', 'major7': 'Major 7', 'minor7': 'Minor 7', 'sus2': 'Sus2', 'sus4': 'Sus4', 'diminished': 'Diminished', 'augmented': 'Augmented' };
+            // 吉他音域频率范围（E2=82.41Hz 到 E6=1318.51Hz，扩大检测范围到20Hz-1500Hz）
+            const MIN_GUITAR_FREQ = 20;
+            const MAX_GUITAR_FREQ = 1500;
+            // ---------------------- 元素引用（主屏幕+全屏） ----------------------
+            // 主屏幕元素
+            const mainScreen = document.getElementById('mainScreen');
+            const fretboard = document.getElementById('fretboard');
+            const fretNumbers = document.getElementById('fretNumbers');
+            const targetIntervalEl = document.getElementById('targetInterval');
+            const scaleSequenceEl = document.getElementById('scaleSequence');
+            const scoreEl = document.getElementById('score');
+            const correctCountEl = document.getElementById('correctCount');
+            const totalCountEl = document.getElementById('totalCount');
+            const accuracyEl = document.getElementById('accuracy');
+            const feedbackEl = document.getElementById('feedback');
+            const nextBtn = document.getElementById('nextBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const startFullscreenBtn = document.getElementById('startFullscreenBtn');
+            const autoNextIndicator = document.getElementById('autoNextIndicator');
+            const mainFretboardContainer = document.getElementById('mainFretboardContainer');
+            const mainFretboardFooter = document.getElementById('mainFretboardFooter');
+            
+            // 全屏元素
+            const practiceScreen = document.getElementById('practiceScreen');
+            const fullscreenFretboard = document.getElementById('fullscreenFretboard');
+            const fullscreenFretNumbers = document.getElementById('fullscreenFretNumbers');
+            const fullscreenTargetIntervalEl = document.getElementById('fullscreenTargetInterval');
+            const fullscreenScaleSequenceEl = document.getElementById('fullscreenScaleSequence');
+            const fullscreenScoreEl = document.getElementById('fullscreenScore');
+            const fullscreenCorrectCountEl = document.getElementById('fullscreenCorrectCount');
+            const fullscreenTotalCountEl = document.getElementById('fullscreenTotalCount');
+            const fullscreenAccuracyEl = document.getElementById('fullscreenAccuracy');
+            const fullscreenFeedbackEl = document.getElementById('fullscreenFeedback');
+            const fullscreenNextBtn = document.getElementById('fullscreenNextBtn');
+            const fullscreenResetBtn = document.getElementById('fullscreenResetBtn');
+            const fullscreenAutoNextIndicator = document.getElementById('fullscreenAutoNextIndicator');
+            const fullscreenContentContainer = document.getElementById('fullscreenContentContainer');
+            const fullscreenFretboardContainer = document.getElementById('fullscreenFretboardContainer');
+            const fullscreenFretboardFooter = document.getElementById('fullscreenFretboardFooter');
+            
+            // 设置项元素
+            const practiceModeBtns = document.querySelectorAll('.btn-practice');
+            const inputModeBtns = document.querySelectorAll('.btn-input');
+            const orderModeBtns = document.querySelectorAll('.btn-mode');
+            const fretRangeBtns = document.querySelectorAll('.btn-range');
+            const rootNoteEl = document.getElementById('rootNote');
+            const scaleModeEl = document.getElementById('scaleMode');
+            const chordTypeEl = document.getElementById('chordType');
+            const chordIntervalsEl = document.getElementById('chordIntervals');
+            const scaleModeGroup = document.getElementById('scaleModeGroup');
+            const chordTypeGroup = document.getElementById('chordTypeGroup');
+            const chordIntervalsGroup = document.getElementById('chordIntervalsGroup');
+            // ---------------------- 状态管理（统一管理主屏幕+全屏） ----------------------
+            let currentState = {
+                // 基础设置
+                practiceMode: 'scale',    // 练习模式：scale/chord
+                inputMode: 'click',       // 输入方式：click/microphone
+                orderMode: 'ordered',     // 顺序：ordered/reverse/random
+                fretRange: '12',          // 指板范围：12/15/18
+                currentRootNote: 'C',     // 当前使用的根音（实时更新）
+                scaleMode: 'random',      // 调式
+                chordType: 'random',      // 和弦类型
+                chordIntervals: 'all',    // 和弦音组合
+                //自定义和弦进行
+                useCustomChords: false,   // 是否使用自定义和弦进行
+                customChordSequence: [],  // 用户自定义的和弦进行
+                customChordIndex: 0,      // 当前自定义和弦进行的索引
+                // 练习数据
+                score: 0,
+                correctCount: 0,
+                totalCount: 0,
+                accuracy: 0,
+                currentIntervals: [],     // 当前音程列表
+                currentSequence: [],      // 当前弹奏序列
+                currentStep: 0,           // 当前步骤
+                correctPositions: [],     // 正确位置列表
+                isAnswered: false,        // 是否完成当前题
+                timeoutId: null,          // 自动下一题定时器
+                countdownInterval: null,  // 倒计时定时器
+                // 麦克风相关
+                audioContext: null,
+                analyser: null,
+                microphone: null,
+                scriptProcessor: null,    // 重命名避免混淆
+                mediaStream: null,
+                isRecording: false,       // 是否正在录音
+                confidenceThreshold: 0.3, // 降低置信度阈值，扩大识别范围
+                // 全屏状态
+                isFullscreen: false       // 是否全屏
+            };
+            // ---------------------- 屏幕唤醒锁变量声明 ----------------------
+            let wakeLock = null;
+            // ---------------------- 工具函数：频率转音高（覆盖全音域） ----------------------
+            // 频率转音名（考虑八度，支持低音区）
+            // 修复后的频率转音名函数 - 确保261.6Hz正确识别为C音
+            function freqToNote(freq) {
+                if (!freq || freq <= 0) return null;
+                
+                // A4 = 440Hz
+                const A4 = 440;
+                const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                
+                // 计算完整的MIDI音符编号（A4=69）
+                const noteNum = 69 + 12 * Math.log2(freq / A4);
+                // 取整得到最接近的音高索引
+                const noteIndex = Math.round(noteNum) % 12;
+                
+                // 处理负索引
+                return noteNames[(noteIndex + 12) % 12];
+            }
+            // ---------------------- 指板初始化（适配主屏幕+全屏） ----------------------
+            function initFretboard(targetFretboard, maxFret) {
+                targetFretboard.innerHTML = '';
+                // 创建6根弦（6弦到1弦：E-A-D-G-B-E）
+                for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
+                    const stringEl = document.createElement('div');
+                    stringEl.className = 'string';
+                    const openNote = standardTuning[stringIdx];
+                    // 创建品（0- maxFret）
+                    for (let fret = 0; fret <= maxFret; fret++) {
+                        const fretEl = document.createElement('div');
+                        fretEl.className = 'fret';
+                        fretEl.dataset.string = stringIdx;
+                        fretEl.dataset.fret = fret;
+                        // 点击事件（仅输入方式为click时生效）
+                        fretEl.addEventListener('click', () => {
+                            if (currentState.inputMode === 'click' && !currentState.isAnswered) {
+                                handleFretClick(fretEl, stringIdx, fret);
+                            }
+                        });
+                        // 0品显示空弦音
+                        if (fret === 0) {
+                            const openNoteEl = document.createElement('div');
+                            openNoteEl.className = 'fret-marker';
+                            openNoteEl.textContent = openNote;
+                            openNoteEl.style.fontSize = '12px';
+                            fretEl.appendChild(openNoteEl);
+                        }
+                        stringEl.appendChild(fretEl);
+                    }
+                    targetFretboard.appendChild(stringEl);
+                }
+            }
+            // 初始化品数标记
+            function initFretNumbers(targetFretNumbers, maxFret) {
+                targetFretNumbers.innerHTML = '';
+                for (let fret = 0; fret <= maxFret; fret++) {
+                    const fretNumberEl = document.createElement('div');
+                    fretNumberEl.className = 'fret-number';
+                    if (fret > 0) fretNumberEl.textContent = fret;
+                    targetFretNumbers.appendChild(fretNumberEl);
+                }
+            }
+            // ---------------------- 控制全屏指板显示/隐藏 ----------------------
+            function toggleFullscreenFretboard() {
+                if (currentState.isFullscreen && currentState.inputMode === 'microphone') {
+                    fullscreenContentContainer.classList.add('fullscreen-mic-hide');
+                } else {
+                    fullscreenContentContainer.classList.remove('fullscreen-mic-hide');
+                }
+            }
+            // ---------------------- 练习生成（统一逻辑） ----------------------
+            function generateExercise() {
+                // 清除旧定时器（防止残留）
+                if (currentState.timeoutId) clearTimeout(currentState.timeoutId);
+                if (currentState.countdownInterval) clearInterval(currentState.countdownInterval);
+                // 重置步骤状态
+                currentState.isAnswered = false;
+                currentState.currentStep = 0;
+                // 隐藏自动下一题提示
+                autoNextIndicator.style.display = 'none';
+                if (currentState.isFullscreen) fullscreenAutoNextIndicator.style.display = 'none';
+                // 清空反馈
+                feedbackEl.textContent = '';
+                feedbackEl.className = 'feedback';
+                if (currentState.isFullscreen) {
+                    fullscreenFeedbackEl.textContent = '';
+                    fullscreenFeedbackEl.className = 'feedback';
+                }
+                // 1. 获取当前设置
+                const maxFret = parseInt(currentState.fretRange);
+                const practiceMode = currentState.practiceMode;
+                const orderMode = currentState.orderMode;
+                // 2. 生成音程列表
+                let mode, intervals;
+                if (practiceMode === 'melody') {
+                    // 乐曲练习模式
+                    // 使用用户选择的根音
+                    currentState.currentRootNote = rootNoteEl.value === 'random' 
+                        ? Object.keys(noteToSemitones)[Math.floor(Math.random() * 12)] 
+                        : rootNoteEl.value;
+                    // 获取用户选择的歌曲
+                    const melodySelectionEl = document.getElementById('melodySelection');
+                    mode = melodySelectionEl ? melodySelectionEl.value : 'twinkle';
+                    intervals = commonMelodies[mode].intervals;
+                    // 显示标题
+                    const title = `${currentState.currentRootNote} ${commonMelodies[mode].name}`;
+                    targetIntervalEl.textContent = title;
+                    if (currentState.isFullscreen) fullscreenTargetIntervalEl.textContent = title;
+                } else if (practiceMode === 'scale') {
+                    // 音阶模式：获取当前调式
+                    // 根音随机：每次重新生成，不依赖缓存
+                    currentState.currentRootNote = rootNoteEl.value === 'random' 
+                        ? Object.keys(noteToSemitones)[Math.floor(Math.random() * 12)] 
+                        : rootNoteEl.value;
+                    mode = scaleModeEl.value === 'random' 
+                        ? Object.keys(scaleModes)[Math.floor(Math.random() * Object.keys(scaleModes).length)] 
+                        : scaleModeEl.value;
+                    intervals = scaleModes[mode];
+                    // 显示标题
+                    const title = `${currentState.currentRootNote} ${scaleModeEnglish[mode]}`;
+                    targetIntervalEl.textContent = title;
+                    if (currentState.isFullscreen) fullscreenTargetIntervalEl.textContent = title;
+                } else {
+                    // 和弦模式
+                    if (currentState.useCustomChords && currentState.customChordSequence.length > 0) {
+                        // 使用自定义和弦进行
+                        const currentChord = currentState.customChordSequence[currentState.customChordIndex];
+                        currentState.currentRootNote = currentChord.root;
+                        mode = currentChord.type;
+                        // 更新索引，循环使用序列
+                        currentState.customChordIndex = (currentState.customChordIndex + 1) % currentState.customChordSequence.length;
+                    } else {
+                        // 常规和弦生成逻辑
+                        // 根音随机：每次重新生成，不依赖缓存
+                        currentState.currentRootNote = rootNoteEl.value === 'random' 
+                            ? Object.keys(noteToSemitones)[Math.floor(Math.random() * 12)] 
+                            : rootNoteEl.value;
+                        mode = chordTypeEl.value === 'random' 
+                            ? Object.keys(chordTypes)[Math.floor(Math.random() * Object.keys(chordTypes).length)] 
+                            : chordTypeEl.value;
+                    }
+                    // 过滤和弦音程
+                    const allIntervals = chordTypes[mode];
+                    switch(chordIntervalsEl.value) {
+                        case 'root': intervals = ['1']; break;
+                        case 'third': intervals = allIntervals.filter(i => i.includes('3')); break;
+                        case 'fifth': intervals = allIntervals.filter(i => i.includes('5')); break;
+                        case 'seventh': intervals = allIntervals.filter(i => i.includes('7')); break;
+                        case 'root_third': intervals = allIntervals.filter(i => i === '1' || i.includes('3')); break;
+                        case 'root_fifth': intervals = allIntervals.filter(i => i === '1' || i.includes('5')); break;
+                        case 'root_third_fifth': intervals = allIntervals.filter(i => i === '1' || i.includes('3') || i.includes('5')); break;
+                        default: intervals = allIntervals;
+                    }
+                    // 显示标题
+                    const title = `${currentState.currentRootNote} ${chordTypeEnglish[mode]}`;
+                    targetIntervalEl.textContent = title;
+                    if (currentState.isFullscreen) fullscreenTargetIntervalEl.textContent = title;
+                }
+                currentState.currentIntervals = intervals;
+                // 3. 处理顺序/倒序/乱序
+                let sequence = [...intervals];
+                // 乐曲练习模式不应用顺序/倒序/乱序，保持原有旋律
+                if (practiceMode !== 'melody') {
+                    if (orderMode === 'random') {
+                        sequence = sequence.sort(() => Math.random() - 0.5);
+                        // 音阶模式保留第一个音为主音
+                        if (practiceMode === 'scale') {
+                            const rootIndex = sequence.indexOf('1');
+                            if (rootIndex > 0) [sequence[0], sequence[rootIndex]] = [sequence[rootIndex], sequence[0]];
+                        }
+                    } else if (orderMode === 'reverse') {
+                        // 倒序模式：反转整个序列
+                        sequence = [...sequence].reverse();
+                    }
+                }
+                
+                // 对于所有音阶，添加高八度的1，实现从低八度1到高八度1的正序和倒序
+                if (practiceMode === 'scale') {
+                    if (orderMode === 'ordered') {
+                        // 正序：添加高八度1
+                        sequence = sequence.concat('1');
+                    } else if (orderMode === 'reverse') {
+                        // 倒序：在反转后的序列前面添加1
+                        sequence = ['1', ...sequence];
+                    }
+                }
+                currentState.currentSequence = sequence;
+                // 4. 显示序列
+                displayScaleSequence();
+                // 5. 计算正确位置（传递当前根音）
+                calculateCorrectPositions(maxFret);
+                // 6. 初始化指板（非弹奏拾音下）
+                if (currentState.inputMode === 'click') {
+                    initFretboard(fretboard, maxFret);
+                    initFretNumbers(fretNumbers, maxFret);
+                    if (currentState.isFullscreen) {
+                        initFretboard(fullscreenFretboard, maxFret);
+                        initFretNumbers(fullscreenFretNumbers, maxFret);
+                    }
+                }
+                // 7. 控制全屏指板显示
+                if (currentState.isFullscreen) {
+                    toggleFullscreenFretboard();
+                }
+                // 8. 弹奏拾音启动录音（确保音频上下文已激活）
+                // 注意：只在初始化时启动，不在generateExercise中重复启动
+                // 避免与按钮点击事件冲突导致多次请求权限
+                // if (currentState.inputMode === 'microphone' && !currentState.isRecording) {
+                //     startRecording();
+                // }
+                // 更新统计信息的显示状态
+                updateStats();
+            }
+            // 显示音级序列
+            function displayScaleSequence() {
+                // 主屏幕
+                scaleSequenceEl.innerHTML = '';
+                currentState.currentSequence.forEach((interval, idx) => {
+                    const noteEl = document.createElement('span');
+                    noteEl.className = 'scale-note';
+                    noteEl.textContent = interval;
+                    scaleSequenceEl.appendChild(noteEl);
+                    if (idx < currentState.currentSequence.length - 1) scaleSequenceEl.appendChild(document.createTextNode(' '));
+                });
+                // 全屏
+                if (currentState.isFullscreen) {
+                    fullscreenScaleSequenceEl.innerHTML = '';
+                    currentState.currentSequence.forEach((interval, idx) => {
+                        const noteEl = document.createElement('span');
+                        noteEl.className = 'scale-note';
+                        noteEl.textContent = interval;
+                        fullscreenScaleSequenceEl.appendChild(noteEl);
+                        if (idx < currentState.currentSequence.length - 1) fullscreenScaleSequenceEl.appendChild(document.createTextNode(' '));
+                    });
+                    
+                    // 如果是全屏且弹奏拾音，同时更新弹奏拾音下的音级数显示
+                    if (currentState.inputMode === 'microphone') {
+                        const fullscreenExerciseIntervals = document.getElementById('fullscreenExerciseIntervals');
+                        if (fullscreenExerciseIntervals && currentState.currentSequence && currentState.currentSequence.length > 0) {
+                            fullscreenExerciseIntervals.textContent = `音级数: ${currentState.currentSequence.join(' ')}`;
+                        }
+                    }
+                }
+            }
+            // 计算正确位置（含等音处理）
+            function calculateCorrectPositions(maxFret) {
+                currentState.correctPositions = [];
+                const rootValue = noteToSemitones[currentState.currentRootNote];
+                // 遍历所有位置（1弦到6弦）
+                for (let stringIdx = 0; stringIdx < 6; stringIdx++) {
+                    // 调整弦索引以匹配新的调弦顺序（stringIdx 0对应1弦）
+                    const adjustedStringIdx = 5 - stringIdx;
+                    const openNote = standardTuning[adjustedStringIdx];
+                    const openNoteValue = noteToSemitones[openNote];
+                    for (let fret = 0; fret <= maxFret; fret++) {
+                        // 当前位置音高值（0-11）
+                        const currentNoteValue = (openNoteValue + fret) % 12;
+                        // 匹配当前音程列表
+                        for (let i = 0; i < currentState.currentIntervals.length; i++) {
+                            const interval = currentState.currentIntervals[i];
+                            const targetNoteValue = (rootValue + intervalToSemitones[interval]) % 12;
+                            if (currentNoteValue === targetNoteValue) {
+                                currentState.correctPositions.push({ 
+                                    string: stringIdx, 
+                                    fret: fret, 
+                                    interval: interval, 
+                                    intervalIndex: i,
+                                    noteValue: currentNoteValue
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                // 处理等音（#4↔b5、#5↔b6）
+                const enharmonicMap = { '#4': 'b5', 'b5': '#4', '#5': 'b6', 'b6': '#5' };
+                Object.keys(enharmonicMap).forEach(note => {
+                    const enharmonicNote = enharmonicMap[note];
+                    if (currentState.currentIntervals.includes(note)) {
+                        const targetValue = (rootValue + intervalToSemitones[note]) % 12;
+                        // 为等音添加额外正确位置
+                        currentState.correctPositions.forEach(pos => {
+                            if (pos.noteValue === targetValue && !currentState.correctPositions.some(p => 
+                                p.string === pos.string && p.fret === pos.fret && p.interval === enharmonicNote
+                            )) {
+                                currentState.correctPositions.push({
+                                    ...pos,
+                                    interval: enharmonicNote,
+                                    intervalIndex: currentState.currentIntervals.indexOf(enharmonicNote) !== -1 
+                                        ? currentState.currentIntervals.indexOf(enharmonicNote) 
+                                        : pos.intervalIndex
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            // 检查并申请录音权限
+            function requestRecordPermission() {
+                // 定义权限常量
+                const recordPermission = 'android.permission.RECORD_AUDIO';
+                
+                // 1. 检查权限状态
+                plus.android.requestPermissions(
+                    [recordPermission], // 要申请的权限列表
+                    function(result) {
+                        // 3. 处理授权结果
+                        console.log('申请结果:', result);
+                        if (result.deniedAlways.length > 0) {
+                            // 用户已永久拒绝，需要引导用户到系统设置页手动开启
+                            console.log('用户已永久拒绝录音权限，需要引导至设置页面');
+                            // 这里可以弹出一个自定义对话框，提示用户去应用设置中打开权限
+                            // ...
+                        } else if (result.deniedPresent.length > 0) {
+                            // 用户此次拒绝，但未勾选"不再询问"
+                            console.log('用户拒绝授权');
+                            // 可以根据情况选择再次解释后申请
+                        } else if (result.granted.length > 0) {
+                            // 用户已授权，可以开始录音
+                            console.log('录音权限已获取');
+                            // 调用你的开始录音逻辑
+                            // startRecording();
+                        }
+                    },
+                    function(error) {
+                        // 申请过程发生错误
+                        console.error('申请权限出错:', error);
+                    }
+                );
+            }
+
+            // 在需要录音的地方调用此函数，例如按钮点击事件中
+            // requestRecordPermission();
+            // ---------------------- 输入处理（点击+麦克风） ----------------------
+            // 1. 指板点击处理
+            function handleFretClick(fretEl, stringIdx, fret) {
+                if (currentState.isAnswered) return;
+                // 检查是否为正确位置
+                // 调整弦索引以匹配calculateCorrectPositions函数中的逻辑
+                const adjustedStringIdx = 5 - stringIdx;
+                const correctPos = currentState.correctPositions.find(p => 
+                    p.string === adjustedStringIdx && p.fret === fret
+                );
+                if (!correctPos) {
+                    // 错误处理
+                    currentState.totalCount++;
+                    currentState.score = Math.max(0, currentState.score - 5);
+                    feedbackEl.textContent = '错误，请再试一次';
+                    feedbackEl.className = 'feedback incorrect';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = '错误，请再试一次';
+                        fullscreenFeedbackEl.className = 'feedback incorrect';
+                    }
+                    updateStats();
+                    return;
+                }
+                // 检查是否为当前步骤需要的音级
+                const currentRequiredInterval = currentState.currentSequence[currentState.currentStep];
+                const isCurrentStepInterval = correctPos.interval === currentRequiredInterval ||
+                    (enharmonicMap[correctPos.interval] === currentRequiredInterval);
+                if (!isCurrentStepInterval) {
+                    feedbackEl.textContent = `请弹奏当前音级：${currentRequiredInterval}`;
+                    feedbackEl.className = 'feedback incorrect';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = `请弹奏当前音级：${currentRequiredInterval}`;
+                        fullscreenFeedbackEl.className = 'feedback incorrect';
+                    }
+                    return;
+                }
+                // 正确处理
+                markCorrectStep(fretEl, currentRequiredInterval, stringIdx, fret);
+            }
+            // 2. 麦克风录音初始化（更新为麦克风手机ui.html版本）
+            function startRecording() {
+                if (currentState.isRecording || currentState.inputMode !== 'microphone') return;
+                try {
+                    // 初始化音频上下文和状态
+                    if (!currentState.audioContext) {
+                        currentState.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                            latencyHint: 'interactive' // 低延迟模式
+                        });
+                    }
+                    
+                    // 初始化状态变量
+                    currentState.isRecording = false;
+                    currentState.mediaStream = null;
+                    currentState.pitchBuffer = [];
+                    currentState.bufferSize = 3; // 减少缓冲区大小以加快响应
+                    currentState.confidenceThreshold = 0.5; // 降低置信度阈值以提高检测灵敏度
+                    
+                    // 显示音高显示元素
+                    togglePitchDisplay(true);
+                    
+                    // 获取麦克风权限
+                    navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: false,
+                            channelCount: 1
+                        }
+                    })
+                    .then(stream => {
+                        currentState.mediaStream = stream;
+                        
+                        if (currentState.audioContext.state === 'suspended') {
+                            currentState.audioContext.resume().then(() => {
+                                console.log('音频上下文已激活');
+                                initAudioProcessing();
+                            });
+                        } else {
+                            initAudioProcessing();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('麦克风权限获取失败:', err);
+                        feedbackEl.textContent = '请允许麦克风权限';
+                        feedbackEl.className = 'feedback incorrect';
+                        if (currentState.isFullscreen) {
+                            fullscreenFeedbackEl.textContent = '请允许麦克风权限';
+                            fullscreenFeedbackEl.className = 'feedback incorrect';
+                        }
+                    });
+                } catch (e) {
+                    console.error('音频初始化失败:', e);
+                    feedbackEl.textContent = '麦克风初始化失败，请重试';
+                    feedbackEl.className = 'feedback incorrect';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = '麦克风初始化失败，请重试';
+                        fullscreenFeedbackEl.className = 'feedback incorrect';
+                    }
+                }
+            }
+            
+            // 初始化音频处理节点
+            function initAudioProcessing() {
+                if (!currentState.mediaStream || !currentState.audioContext) return;
+                
+                // 创建分析器节点
+                currentState.analyser = currentState.audioContext.createAnalyser();
+                currentState.analyser.fftSize = 4096;
+                
+                // 创建脚本处理节点
+                currentState.scriptProcessor = currentState.audioContext.createScriptProcessor(4096, 1, 1);
+                currentState.scriptProcessor.onaudioprocess = processAudio;
+                
+                // 连接节点链
+                currentState.microphone = currentState.audioContext.createMediaStreamSource(currentState.mediaStream);
+                currentState.microphone.connect(currentState.analyser);
+                currentState.analyser.connect(currentState.scriptProcessor);
+                currentState.scriptProcessor.connect(currentState.audioContext.destination);
+                
+                currentState.isRecording = true;
+                console.log('麦克风已启动，开始监听音高');
+                feedbackEl.textContent = '麦克风已就绪，请弹奏';
+                feedbackEl.className = 'feedback';
+                if (currentState.isFullscreen) {
+                    fullscreenFeedbackEl.textContent = '麦克风已就绪，请弹奏';
+                    fullscreenFeedbackEl.className = 'feedback';
+                }
+            }
+            
+            // 停止录音
+            function stopRecording() {
+                if (!currentState.isRecording) return;
+                
+                // 隐藏音高显示元素
+                togglePitchDisplay(false);
+                
+                // 断开节点连接
+                if (currentState.scriptProcessor) currentState.scriptProcessor.disconnect();
+                if (currentState.analyser) currentState.analyser.disconnect();
+                if (currentState.microphone) currentState.microphone.disconnect();
+                
+                // 停止流
+                if (currentState.mediaStream) {
+                    currentState.mediaStream.getTracks().forEach(track => track.stop());
+                    currentState.mediaStream = null;
+                }
+                
+                // 关闭上下文
+                if (currentState.audioContext) {
+                    currentState.audioContext.close().then(() => {
+                        currentState.audioContext = null;
+                    });
+                }
+                
+                currentState.isRecording = false;
+                console.log('麦克风已停止');
+            }
+            // 音高识别核心函数 - 从麦克风手机ui.html移植
+            
+            // 频率转换为音符名称和八度
+            function frequencyToNoteName(frequency) {
+                const A4 = 440;
+                const noteNames = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+                
+                // 计算半音距离
+                const noteNum = 12 * (Math.log2(frequency / A4)) + 69;
+                const noteIndex = Math.round(noteNum) % 12;
+                const octave = Math.floor(noteNum / 12) - 1;
+                
+                return {
+                    name: noteNames[noteIndex],
+                    octave: octave
+                };
+            }
+            
+            // 计算信号强度作为置信度的估计
+            function calculateSignalStrength(buffer) {
+                let sum = 0;
+                for (let i = 0; i < buffer.length; i++) {
+                    sum += Math.abs(buffer[i]);
+                }
+                const average = sum / buffer.length;
+                return Math.min(1.0, average * 10); // 将平均振幅转换为0-1范围
+            }
+            
+            // 处理音频数据 - 从麦克风手机ui.html移植
+            function processAudio(event) {
+                if (!currentState.isRecording || currentState.isAnswered) return;
+                
+                const inputData = event.inputBuffer.getChannelData(0);
+                const sampleRate = event.inputBuffer.sampleRate;
+                
+                // 预处理：降噪和增强信号
+                const processedData = preprocessAudio(inputData);
+                
+                // 使用修复后的YIN算法
+                const detectPitch = Pitchfinder.YIN({ 
+                    threshold: 0.1,
+                    sampleRate: sampleRate
+                });
+                
+                const pitch = detectPitch(processedData);
+                
+                // 改进的置信度计算
+                const confidence = calculateConfidence(processedData, pitch);
+                
+                if (pitch && pitch > 0 && confidence >= currentState.confidenceThreshold) {
+                    // 应用更稳定的滤波
+                    if (!currentState.pitchBuffer) currentState.pitchBuffer = [];
+                    currentState.pitchBuffer.push(pitch);
+                    
+                    // 保持缓冲区大小适中
+                    if (currentState.pitchBuffer.length > 5) {
+                        currentState.pitchBuffer.shift();
+                    }
+                    
+                    // 使用中值滤波减少异常值影响
+                    const smoothedPitch = medianFilter(currentState.pitchBuffer);
+                    
+                    // 检查音高匹配
+                    checkPitchMatch(smoothedPitch, confidence);
+                }
+            }
+                        // 新增：音频预处理函数
+            function preprocessAudio(audioData) {
+                const processed = new Float32Array(audioData.length);
+                
+                // 简单的降噪：移除静音部分
+                let maxAmplitude = 0;
+                for (let i = 0; i < audioData.length; i++) {
+                    maxAmplitude = Math.max(maxAmplitude, Math.abs(audioData[i]));
+                }
+                
+                // 只处理足够响亮的信号
+                const noiseThreshold = 0.01;
+                if (maxAmplitude < noiseThreshold) {
+                    return processed; // 返回静音数据
+                }
+                
+                // 标准化音量
+                const gain = 1.0 / maxAmplitude;
+                for (let i = 0; i < audioData.length; i++) {
+                    processed[i] = audioData[i] * gain;
+                }
+                
+                return processed;
+            }
+            // 新增：改进的置信度计算
+            function calculateConfidence(audioData, detectedPitch) {
+                if (!detectedPitch) return 0;
+                
+                // 计算信号强度
+                let signalStrength = 0;
+                for (let i = 0; i < audioData.length; i++) {
+                    signalStrength += Math.abs(audioData[i]);
+                }
+                signalStrength /= audioData.length;
+                
+                // 计算谐波含量（简单的频谱峰值检测）
+                let harmonicConfidence = 0;
+                const fundamentalFreq = detectedPitch;
+                
+                // 检查是否存在二次谐波（2倍频）
+                const expectedHarmonic2 = fundamentalFreq * 2;
+                // 这里可以添加更复杂的谐波检测逻辑
+                
+                // 综合置信度
+                const confidence = Math.min(1.0, signalStrength * 10) * 0.7 + harmonicConfidence * 0.3;
+                
+                return confidence;
+            }
+
+            // 新增：中值滤波函数
+            function medianFilter(values) {
+                if (values.length === 0) return 0;
+                
+                const sorted = values.slice().sort((a, b) => a - b);
+                const mid = Math.floor(sorted.length / 2);
+                
+                if (sorted.length % 2 === 0) {
+                    return (sorted[mid - 1] + sorted[mid]) / 2;
+                } else {
+                    return sorted[mid];
+                }
+            }
+            // 检查检测到的音高是否匹配当前步骤的目标音高
+            // 修复后的音高匹配检查
+            function checkPitchMatch(detectedPitch, confidence) {
+                if (currentState.isAnswered || confidence < currentState.confidenceThreshold) return;
+                
+                const currentInterval = currentState.currentSequence[currentState.currentStep];
+                const rootValue = noteToSemitones[currentState.currentRootNote];
+                const targetSemitone = (rootValue + intervalToSemitones[currentInterval]) % 12;
+                
+                // 将检测到的频率转换为音名
+                const detectedNoteName = freqToNote(detectedPitch);
+                if (!detectedNoteName) return;
+                
+                // 将目标半音数转换为音名
+                const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                const targetNoteName = noteNames[targetSemitone];
+                
+                // 更新实时音高显示
+                updateRealTimePitchDisplay(detectedPitch, detectedNoteName);
+                
+                // 比较音名（考虑等音）
+                const isMatch = detectedNoteName === targetNoteName || 
+                            enharmonicMap[detectedNoteName] === targetNoteName;
+                
+                if (isMatch) {
+                    handleCorrectAnswer(currentInterval);
+                }
+            }
+            
+            // 处理正确答案
+            function handleCorrectAnswer(interval) {
+                // 先更新状态，避免频繁的DOM操作
+                currentState.correctCount++;
+                currentState.totalCount++;
+                currentState.score += 10;
+                
+                // 标记当前音级为已弹奏
+                const mainNoteEls = document.querySelectorAll('#scaleSequence .scale-note');
+                const fullscreenNoteEls = currentState.isFullscreen ? document.querySelectorAll('#fullscreenScaleSequence .scale-note') : [];
+                if (mainNoteEls[currentState.currentStep]) {
+                    mainNoteEls[currentState.currentStep].classList.add('played');
+                }
+                if (currentState.isFullscreen && fullscreenNoteEls[currentState.currentStep]) {
+                    fullscreenNoteEls[currentState.currentStep].classList.add('played');
+                }
+                
+                // 寻找对应的正确位置（任意八度）
+                const correctPos = currentState.correctPositions.find(p => 
+                    p.interval === interval || 
+                    enharmonicMap[p.interval] === interval
+                );
+                
+                // 指板高亮（存在指板和正确位置时）
+                if (correctPos) {
+                    const targetFretboard = currentState.isFullscreen ? fullscreenFretboard : fretboard;
+                    const fretEl = targetFretboard.querySelector(`.fret[data-string="${correctPos.string}"][data-fret="${correctPos.fret}"]`);
+                    if (fretEl) {
+                        fretEl.classList.add('active');
+                        // 显示音级标记
+                        const intervalDisplay = document.createElement('div');
+                        intervalDisplay.className = 'interval-display';
+                        intervalDisplay.textContent = interval;
+                        fretEl.appendChild(intervalDisplay);
+                        // 隐藏0品空弦音
+                        if (correctPos.fret === 0) {
+                            const openNoteEl = fretEl.querySelector('.fret-marker');
+                            if (openNoteEl) openNoteEl.style.visibility = 'hidden';
+                        }
+                    }
+                }
+                
+                // 更新步骤
+                currentState.currentStep++;
+                
+                // 反馈
+                feedbackEl.textContent = '正确！';
+                feedbackEl.className = 'feedback correct';
+                if (currentState.isFullscreen) {
+                    fullscreenFeedbackEl.textContent = '正确！';
+                    fullscreenFeedbackEl.className = 'feedback correct';
+                }
+                
+                // 检查是否完成所有步骤
+                if (currentState.currentStep >= currentState.currentSequence.length) {
+                    // 完成当前题
+                    currentState.isAnswered = true;
+                    currentState.accuracy = currentState.totalCount > 0 
+                        ? Math.round((currentState.correctCount / currentState.totalCount) * 100) 
+                        : 0;
+                    
+                    // 立即生成下一题（极短延迟避免UI卡顿）
+                    setTimeout(() => {
+                        generateExercise();
+                    }, 100);
+                } else {
+                    // 继续下一步
+                    feedbackEl.textContent = '';
+                    feedbackEl.className = 'feedback';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = '';
+                        fullscreenFeedbackEl.className = 'feedback';
+                    }
+                }
+                
+                // 更新统计显示
+                updateStats();
+            }
+            // 等音映射表
+            const enharmonicMap = {
+                '#4': 'b5', 'b5': '#4',
+                '#5': 'b6', 'b6': '#5',
+                'C#': 'Db', 'Db': 'C#',
+                'D#': 'Eb', 'Eb': 'D#',
+                'F#': 'Gb', 'Gb': 'F#',
+                'G#': 'Ab', 'Ab': 'G#',
+                'A#': 'Bb', 'Bb': 'A#'
+            };
+            
+            // 创建实时音高显示元素
+            const createPitchDisplayElement = () => {
+                const pitchDisplay = document.createElement('div');
+                pitchDisplay.id = 'pitchDisplay';
+                pitchDisplay.className = 'pitch-display';
+                pitchDisplay.textContent = '未检测到音高';
+                pitchDisplay.style.display = 'none'; // 默认隐藏
+                return pitchDisplay;
+            };
+            
+            // 创建并添加实时音高显示元素到文档
+            const pitchDisplayEl = createPitchDisplayElement();
+            document.body.appendChild(pitchDisplayEl);
+            
+            // 更新实时音高显示
+            function updateRealTimePitchDisplay(pitch, note) {
+                if (pitch > 0) {
+                    pitchDisplayEl.textContent = `${note} (${pitch.toFixed(1)}Hz)`;
+                    pitchDisplayEl.classList.add('active');
+                } else {
+                    pitchDisplayEl.textContent = '未检测到音高';
+                    pitchDisplayEl.classList.remove('active');
+                }
+            }
+            
+            // 切换音高显示
+            function togglePitchDisplay(show) {
+                pitchDisplayEl.style.display = show ? 'block' : 'none';
+            }
+            // ---------------------- 正确步骤处理（即时反馈） ----------------------
+            function markCorrectStep(fretEl, interval, stringIdx, fret) {
+                // 1. 标记当前音级为已弹奏（立即变灰）
+                const mainNoteEls = document.querySelectorAll('#scaleSequence .scale-note');
+                const fullscreenNoteEls = currentState.isFullscreen ? document.querySelectorAll('#fullscreenScaleSequence .scale-note') : [];
+                if (mainNoteEls[currentState.currentStep]) {
+                    mainNoteEls[currentState.currentStep].classList.add('played');
+                }
+                if (currentState.isFullscreen && fullscreenNoteEls[currentState.currentStep]) {
+                    fullscreenNoteEls[currentState.currentStep].classList.add('played');
+                }
+                
+                // 2. 指板高亮（存在指板时）
+                if (fretEl) {
+                    fretEl.classList.add('active');
+                    // 显示音级标记
+                    const intervalDisplay = document.createElement('div');
+                    intervalDisplay.className = 'interval-display';
+                    intervalDisplay.textContent = interval;
+                    fretEl.appendChild(intervalDisplay);
+                    // 隐藏0品空弦音
+                    if (fret === 0) {
+                        const openNoteEl = fretEl.querySelector('.fret-marker');
+                        if (openNoteEl) openNoteEl.style.visibility = 'hidden';
+                    }
+                }
+                
+                // 3. 更新步骤
+                currentState.currentStep++;
+                
+                // 4. 判断是否完成当前题
+                if (currentState.currentStep >= currentState.currentSequence.length) {
+                    // 完成当前题：更新统计
+                    currentState.totalCount++;
+                    currentState.correctCount++;
+                    currentState.score += 10;
+                    currentState.accuracy = currentState.totalCount > 0 
+                        ? Math.round((currentState.correctCount / currentState.totalCount) * 100) 
+                        : 0;
+                    // 反馈
+                    feedbackEl.textContent = '正确！';
+                    feedbackEl.className = 'feedback correct';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = '正确！';
+                        fullscreenFeedbackEl.className = 'feedback correct';
+                    }
+                    currentState.isAnswered = true;
+                    // 立即生成下一题（极短延迟避免UI卡顿）
+                    setTimeout(() => {
+                        generateExercise();
+                    }, 100);
+                } else {
+                    // 继续下一步：不显示提示
+                    feedbackEl.textContent = '';
+                    feedbackEl.className = 'feedback';
+                    if (currentState.isFullscreen) {
+                        fullscreenFeedbackEl.textContent = '';
+                        fullscreenFeedbackEl.className = 'feedback';
+                    }
+                }
+                
+                // 5. 更新统计显示
+                updateStats();
+            }
+            // ---------------------- 统计更新（主屏幕+全屏同步） ----------------------
+            function updateStats() {
+                // 获取统计信息容器
+                const statsContainer = document.querySelector('.stats');
+                const fullscreenStatsContainer = currentState.isFullscreen ? document.querySelector('#fullscreenContentContainer .stats') : null;
+                
+                // 只有在非弹奏拾音下才显示统计信息
+                if (currentState.inputMode !== 'microphone') {
+                    // 显示统计信息容器
+                    if (statsContainer) statsContainer.style.display = 'flex';
+                    if (fullscreenStatsContainer) fullscreenStatsContainer.style.display = 'flex';
+                    
+                    // 更新统计数据
+                    scoreEl.textContent = currentState.score;
+                    correctCountEl.textContent = currentState.correctCount;
+                    totalCountEl.textContent = currentState.totalCount;
+                    accuracyEl.textContent = `${currentState.accuracy}%`;
+                    
+                    // 全屏
+                    if (currentState.isFullscreen) {
+                        fullscreenScoreEl.textContent = currentState.score;
+                        fullscreenCorrectCountEl.textContent = currentState.correctCount;
+                        fullscreenTotalCountEl.textContent = currentState.totalCount;
+                        fullscreenAccuracyEl.textContent = `${currentState.accuracy}%`;
+                    }
+                } else {
+                    // 弹奏拾音下不显示任何统计信息
+                    // 隐藏统计信息容器
+                    if (statsContainer) statsContainer.style.display = 'none';
+                    if (fullscreenStatsContainer) fullscreenStatsContainer.style.display = 'none';
+                }
+            }
+            // ---------------------- 重置练习 ----------------------
+            function resetPractice() {
+                // 重置状态
+                currentState.score = 0;
+                currentState.correctCount = 0;
+                currentState.totalCount = 0;
+                currentState.accuracy = 0;
+                currentState.currentStep = 0;
+                currentState.isAnswered = false;
+                // 停止麦克风
+                //stopRecording();
+                // 清除定时器
+                if (currentState.timeoutId) clearTimeout(currentState.timeoutId);
+                if (currentState.countdownInterval) clearInterval(currentState.countdownInterval);
+                // 隐藏提示
+                autoNextIndicator.style.display = 'none';
+                if (currentState.isFullscreen) fullscreenAutoNextIndicator.style.display = 'none';
+                // 清空序列显示
+                scaleSequenceEl.innerHTML = '';
+                if (currentState.isFullscreen) fullscreenScaleSequenceEl.innerHTML = '';
+                // 更新UI
+                updateStats();
+                feedbackEl.textContent = '';
+                if (currentState.isFullscreen) fullscreenFeedbackEl.textContent = '';
+                // 重新生成练习
+                generateExercise();
+            }
+            // ---------------------- 全屏切换 ----------------------
+            function toggleFullscreen() {
+                currentState.isFullscreen = !currentState.isFullscreen;
+                if (currentState.isFullscreen) {
+                    // 进入全屏
+                    mainScreen.style.display = 'none';
+                    practiceScreen.style.display = 'flex';
+                    requestWakeLock();
+                    // 同步练习内容
+                    generateExercise();
+                    // 更新全屏UI显示
+                    updateFullscreenUI();
+                } else {
+                    // 退出全屏
+                    practiceScreen.style.display = 'none';
+                    mainScreen.style.display = 'block';
+                    //releaseWakeLock();
+                    //stopRecording();
+                    // 同步练习内容
+                    generateExercise();
+                }
+            }
+            
+            // 根据输入模式更新全屏UI显示
+            function updateFullscreenUI() {
+                if (!currentState.isFullscreen) return;
+                
+                const fullscreenControls = document.getElementById('fullscreenControls');
+                const fullscreenMicrophoneContent = document.getElementById('fullscreenMicrophoneContent');
+                const fullscreenExerciseTitle = document.getElementById('fullscreenExerciseTitle');
+                const fullscreenExerciseIntervals = document.getElementById('fullscreenExerciseIntervals');
+                
+                if (currentState.inputMode === 'microphone') {
+                    // 弹奏拾音：隐藏控制按钮，显示练习详情
+                    fullscreenControls.style.display = 'none';
+                    fullscreenMicrophoneContent.style.display = 'block';
+                    
+                    // 生成下一条练习的信息（不影响当前练习状态）
+                    // 1. 获取当前设置
+                    const maxFret = parseInt(currentState.fretRange);
+                    const practiceMode = currentState.practiceMode;
+                    const orderMode = currentState.orderMode;
+                    
+                    // 2. 获取下一条练习的根音和调式/和弦名
+                    let nextTitle = '';
+                    let nextSequence = [];
+                    
+                    // 模拟生成下一条练习的信息
+                    if (practiceMode === 'scale') {
+                        // 音阶模式
+                        const nextRootNote = rootNoteEl.value === 'random' 
+                            ? Object.keys(noteToSemitones)[Math.floor(Math.random() * 12)] 
+                            : rootNoteEl.value;
+                        const nextMode = scaleModeEl.value === 'random' 
+                            ? Object.keys(scaleModes)[Math.floor(Math.random() * Object.keys(scaleModes).length)] 
+                            : scaleModeEl.value;
+                        const nextIntervals = scaleModes[nextMode];
+                        
+                        // 生成标题
+                        nextTitle = `${nextRootNote} ${scaleModeEnglish[nextMode]}`;
+                        
+                        // 处理顺序/乱序
+                        nextSequence = [...nextIntervals];
+                        if (orderMode === 'random') {
+                            nextSequence = nextSequence.sort(() => Math.random() - 0.5);
+                            // 音阶模式保留第一个音为主音
+                            const rootIndex = nextSequence.indexOf('1');
+                            if (rootIndex > 0) [nextSequence[0], nextSequence[rootIndex]] = [nextSequence[rootIndex], nextSequence[0]];
+                        }
+                    } else {
+                        // 和弦模式
+                        let nextRootNote, nextMode;
+                        if (currentState.useCustomChords && currentState.customChordSequence.length > 0) {
+                            // 使用自定义和弦进行
+                            // 计算下一个索引但不更新状态
+                            const nextChordIndex = (currentState.customChordIndex + 1) % currentState.customChordSequence.length;
+                            const nextChord = currentState.customChordSequence[nextChordIndex];
+                            nextRootNote = nextChord.root;
+                            nextMode = nextChord.type;
+                        } else {
+                            // 常规和弦生成逻辑
+                            nextRootNote = rootNoteEl.value === 'random' 
+                                ? Object.keys(noteToSemitones)[Math.floor(Math.random() * 12)] 
+                                : rootNoteEl.value;
+                            nextMode = chordTypeEl.value === 'random' 
+                                ? Object.keys(chordTypes)[Math.floor(Math.random() * Object.keys(chordTypes).length)] 
+                                : chordTypeEl.value;
+                        }
+                        
+                        // 生成标题
+                        nextTitle = `${nextRootNote} ${chordTypeEnglish[nextMode]}`;
+                        
+                        // 获取音级数
+                        const allIntervals = chordTypes[nextMode];
+                        let nextIntervals = [];
+                        switch(chordIntervalsEl.value) {
+                            case 'root': nextIntervals = ['1']; break;
+                            case 'third': nextIntervals = allIntervals.filter(i => i.includes('3')); break;
+                            case 'fifth': nextIntervals = allIntervals.filter(i => i.includes('5')); break;
+                            case 'seventh': nextIntervals = allIntervals.filter(i => i.includes('7')); break;
+                            case 'root_third': nextIntervals = allIntervals.filter(i => i === '1' || i.includes('3')); break;
+                            case 'root_fifth': nextIntervals = allIntervals.filter(i => i === '1' || i.includes('5')); break;
+                            case 'root_third_fifth': nextIntervals = allIntervals.filter(i => i === '1' || i.includes('3') || i.includes('5')); break;
+                            default: nextIntervals = allIntervals;
+                        }
+                        nextSequence = nextIntervals;
+                    }
+                    
+                    // 更新练习详情内容
+                    fullscreenExerciseTitle.textContent = nextTitle;
+                    
+                    // 显示音级数
+                    if (nextSequence && nextSequence.length > 0) {
+                        fullscreenExerciseIntervals.textContent = `${nextSequence.join(' ')}`;
+                    }
+                } else {
+                    // 点击模式：显示控制按钮，隐藏练习详情
+                    fullscreenControls.style.display = 'flex';
+                    fullscreenMicrophoneContent.style.display = 'none';
+                }
+            }
+            // ---------------------- 屏幕唤醒锁（增强版） ----------------------
+            let wakeLockRefreshInterval = null;
+            
+            async function requestWakeLock() {
+                try {
+                    // 检查浏览器支持
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLock.addEventListener('release', () => {
+                            console.log('Wake Lock已释放');
+                            wakeLock = null;
+                        });
+                        console.log('Wake Lock已获取');
+                        
+                        // 设置定期刷新，防止自动释放
+                        if (wakeLockRefreshInterval) {
+                            clearInterval(wakeLockRefreshInterval);
+                        }
+                        wakeLockRefreshInterval = setInterval(async () => {
+                            if (wakeLock !== null) {
+                                try {
+                                    await wakeLock.release();
+                                    wakeLock = await navigator.wakeLock.request('screen');
+                                } catch (err) {
+                                    console.error(`刷新Wake Lock失败: ${err.message}`);
+                                }
+                            }
+                        }, 30000); // 每30秒刷新一次
+                    }
+                } catch (err) {
+                    console.error(`获取Wake Lock失败: ${err.name}, ${err.message}`);
+                }
+            }
+            
+            async function releaseWakeLock() {
+                if (wakeLock !== null) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                    console.log('Wake Lock已手动释放');
+                }
+                
+                // 清除刷新定时器
+                if (wakeLockRefreshInterval) {
+                    clearInterval(wakeLockRefreshInterval);
+                    wakeLockRefreshInterval = null;
+                }
+            }
+            
+            // ---------------------- 事件监听 ----------------------
+            // 1. 练习模式切换（音阶/和弦/乐曲）
+            practiceModeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentState.practiceMode = btn.dataset.value;
+                    practiceModeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // 显示/隐藏设置项
+                    if (currentState.practiceMode === 'scale') {
+                        scaleModeGroup.style.display = 'flex';
+                        chordTypeGroup.style.display = 'none';
+                        chordIntervalsGroup.style.display = 'none';
+                        document.getElementById('customChordsGroup').style.display = 'none';
+                        document.getElementById('melodySelectionGroup').style.display = 'none';
+                        // 显示顺序设置
+                        document.querySelector('.settings-group:has(.btn-mode)').style.display = 'block';
+                    } else if (currentState.practiceMode === 'melody') {
+                        // 乐曲模式：隐藏所有设置项，但保持指板范围可见
+                        scaleModeGroup.style.display = 'none';
+                        chordTypeGroup.style.display = 'none';
+                        chordIntervalsGroup.style.display = 'none';
+                        document.getElementById('customChordsGroup').style.display = 'none';
+                        document.getElementById('melodySelectionGroup').style.display = 'block';
+                        // 隐藏顺序设置
+                        document.querySelector('.settings-group:has(.btn-mode)').style.display = 'none';
+                    } else {
+                        scaleModeGroup.style.display = 'none';
+                        chordTypeGroup.style.display = 'flex';
+                        chordIntervalsGroup.style.display = 'flex';
+                        document.getElementById('customChordsGroup').style.display = 'block';
+                        document.getElementById('melodySelectionGroup').style.display = 'none';
+                        // 显示顺序设置
+                        document.querySelector('.settings-group:has(.btn-mode)').style.display = 'block';
+                    }
+                    generateExercise();
+                });
+            });
+            // 2. 输入方式切换（点击/麦克风）
+            inputModeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentState.inputMode = btn.dataset.value;
+                    inputModeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // 停止录音
+                    stopRecording();
+                    // 显示/隐藏主屏幕指板
+                    if (currentState.inputMode === 'microphone') {
+								requestRecordPermission();
+                        mainFretboardContainer.style.display = 'none';
+                        mainFretboardFooter.style.display = 'none';
+                        // 开始录音
+                        startRecording();
+                    } else {
+                        mainFretboardContainer.style.display = 'block';
+                        mainFretboardFooter.style.display = 'flex';
+                        // 隐藏音高显示元素
+                        togglePitchDisplay(false);
+                    }
+                    generateExercise();
+                    // 更新统计信息的显示状态
+                    updateStats();
+                });
+            });
+            // 3. 顺序模式切换
+            orderModeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // 只有在非乐曲模式下才能切换顺序
+                    if (currentState.practiceMode !== 'melody') {
+                        currentState.orderMode = btn.dataset.value;
+                        orderModeBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        generateExercise();
+                    }
+                });
+            });
+            // 4. 指板范围切换
+            fretRangeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentState.fretRange = btn.dataset.value;
+                    fretRangeBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    generateExercise();
+                });
+            });
+            // 5. 设置项变化
+            rootNoteEl.addEventListener('change', generateExercise);
+            scaleModeEl.addEventListener('change', generateExercise);
+            chordTypeEl.addEventListener('change', generateExercise);
+            chordIntervalsEl.addEventListener('change', generateExercise);
+            
+            // 6.自定义和弦进行相关事件
+            const useCustomChords = document.getElementById('useCustomChords');
+            const customChordsControls = document.getElementById('customChordsControls');
+            const customChordRoot = document.getElementById('customChordRoot');
+            const customChordType = document.getElementById('customChordType');
+            const addCustomChord = document.getElementById('addCustomChord');
+            const clearCustomChords = document.getElementById('clearCustomChords');
+            const customChordSequence = document.getElementById('customChordSequence');
+            
+            // 启用/禁用自定义和弦进行
+            useCustomChords.addEventListener('change', function() {
+                currentState.useCustomChords = this.checked;
+                // 显示/隐藏自定义和弦控件
+                customChordsControls.style.display = this.checked ? 'block' : 'none';
+                // 重置索引
+                currentState.customChordIndex = 0;
+                // 如果在和弦模式下，重新生成练习
+                if (currentState.practiceMode === 'chord') {
+                    generateExercise();
+                }
+            });
+            
+            // 添加和弦到序列
+            addCustomChord.addEventListener('click', function() {
+                const root = customChordRoot.value;
+                const type = customChordType.value;
+                
+                // 添加到序列
+                currentState.customChordSequence.push({ root: root, type: type });
+                
+                // 更新UI显示
+                updateChordSequenceDisplay();
+                
+                // 如果启用了自定义和弦，立即生成新的练习
+                if (currentState.useCustomChords && currentState.practiceMode === 'chord') {
+                    currentState.customChordIndex = currentState.customChordSequence.length - 1; // 设置为刚添加的和弦
+                    generateExercise();
+                }
+            });
+            
+            // 清空序列
+            clearCustomChords.addEventListener('click', function() {
+                console.log('清空序列操作执行');
+                
+                // 直接清空序列，移除确认对话框
+                currentState.customChordSequence = [];
+                currentState.customChordIndex = 0;
+                
+                // 同时清空localStorage中的数据，确保完全同步
+                localStorage.removeItem('guitarPracticeCustomChords');
+                
+                // 清空序列名输入框
+                const sequenceNameInput = document.getElementById('sequenceName');
+                if (sequenceNameInput) {
+                    sequenceNameInput.value = '';
+                }
+                
+                // 更新UI显示
+                updateChordSequenceDisplay();
+                
+                // 添加明确的用户反馈
+                //alert('和弦进行已清空！');
+                
+                // 无论当前模式如何，都重新生成练习（如果启用了自定义和弦）
+                if (currentState.useCustomChords) {
+                    // 如果当前不是和弦模式，先切换到和弦模式
+                    if (currentState.practiceMode !== 'chord') {
+                        currentState.practiceMode = 'chord';
+                        
+                        // 更新UI模式切换
+                        document.querySelector('.btn-practice[data-value="scale"]').classList.remove('active');
+                        document.querySelector('.btn-practice[data-value="chord"]').classList.add('active');
+                        
+                        // 更新设置项显示
+                        scaleModeGroup.style.display = 'none';
+                        chordTypeGroup.style.display = 'block';
+                        chordIntervalsGroup.style.display = 'block';
+                    }
+                    
+                    // 生成新的练习
+                    generateExercise();
+                }
+            });
+            
+            // 7. 保存/加载序列功能
+            // 添加保存按钮（保存到localStorage）
+            const saveCustomChords = document.createElement('button');
+            saveCustomChords.id = 'saveCustomChords';
+            saveCustomChords.className = 'btn btn-secondary';
+            saveCustomChords.textContent = '保存序列到本地存储';
+            saveCustomChords.addEventListener('click', function() {
+                try {
+                    localStorage.setItem('guitarPracticeCustomChords', JSON.stringify(currentState.customChordSequence));
+                    alert('和弦进行已保存到浏览器本地存储！');
+                } catch (e) {
+                    alert('保存失败：' + e.message);
+                }
+            });
+            
+            // 添加导出按钮（支持导出单个或多个序列）
+            const exportCustomChords = document.createElement('button');
+            exportCustomChords.id = 'exportCustomChords';
+            exportCustomChords.className = 'btn btn-secondary';
+            exportCustomChords.textContent = '导出序列为JSON文件';
+            exportCustomChords.addEventListener('click', function() {
+                try {
+                    if (currentState.customChordSequence.length === 0) {
+                        alert('序列为空，无法导出！');
+                        return;
+                    }
+                    
+                    // 询问用户是导出单个序列还是创建包含多个序列的文件
+                    const exportOption = confirm('是否要创建包含多个序列的JSON文件？\n\n点击"确定"创建多序列文件，\n点击"取消"仅导出当前序列。');
+                    
+                    if (!exportOption) {
+                        // 仅导出当前序列
+                        exportSingleSequence();
+                    } else {
+                        // 创建多序列文件
+                        createMultiSequenceFile();
+                    }
+                } catch (e) {
+                    alert('导出失败：' + e.message);
+                }
+            });
+            
+            // 导出单个序列的函数
+            function exportSingleSequence() {
+                // 获取用户输入的歌曲名
+                const sequenceName = document.getElementById('sequenceName').value.trim() || '未命名序列';
+                
+                // 创建包含歌曲名的JSON对象（单首曲子格式）
+                const exportData = {
+                    name: sequenceName,
+                    date: new Date().toISOString(),
+                    sequence: currentState.customChordSequence
+                };
+                
+                // 创建JSON字符串
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                
+                // 创建Blob对象
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                
+                // 创建下载链接
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                // 使用歌曲名作为文件名的一部分
+                const sanitizedName = sequenceName.replace(/[^\w\u4e00-\u9fa5\-]/g, '_');
+                a.download = `${sanitizedName}_chord_sequence_${new Date().toISOString().slice(0, 10)}.json`;
+                
+                // 触发下载
+                document.body.appendChild(a);
+                a.click();
+                
+                // 清理
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                alert(`和弦进行"${sequenceName}"已导出为JSON文件！`);
+            }
+            
+            // 创建多序列文件的函数（支持在一个文件中保存多首曲子）
+            function createMultiSequenceFile() {
+                // 初始化一个规范化的多序列对象
+                const multiSequenceData = {
+                    version: "1.0",
+                    type: "guitar_chord_sequences",
+                    created: new Date().toISOString(),
+                    sequences: []
+                };
+                
+                // 添加当前序列
+                const currentSequenceName = document.getElementById('sequenceName').value.trim() || '未命名序列';
+                multiSequenceData.sequences.push({
+                    name: currentSequenceName,
+                    date: new Date().toISOString(),
+                    sequence: currentState.customChordSequence
+                });
+                
+                // 尝试从localStorage获取其他可能保存的序列
+                try {
+                    const savedSequences = localStorage.getItem('guitarPracticeMultiSequences');
+                    if (savedSequences) {
+                        const parsedSequences = JSON.parse(savedSequences);
+                        if (Array.isArray(parsedSequences)) {
+                            // 将其他序列添加到数组中（避免重复）
+                            parsedSequences.forEach(seq => {
+                                if (seq.name !== currentSequenceName) {
+                                    multiSequenceData.sequences.push(seq);
+                                }
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('获取已保存的多序列失败:', e);
+                }
+                
+                // 创建JSON字符串
+                const jsonStr = JSON.stringify(multiSequenceData, null, 2);
+                
+                // 创建Blob对象
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                
+                // 创建下载链接
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const dateStr = new Date().toISOString().slice(0, 10);
+                a.download = `multiple_songs_chord_sequences_${dateStr}.json`;
+                
+                // 触发下载
+                document.body.appendChild(a);
+                a.click();
+                
+                // 清理
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                alert(`包含 ${multiSequenceData.sequences.length} 首曲子的JSON文件已导出！`);
+            }
+            
+            // 添加加载本地JSON文件按钮（增强版，支持多序列文件和完善的错误处理）
+            const loadLocalJson = document.createElement('button');
+            loadLocalJson.id = 'loadLocalJson';
+            loadLocalJson.className = 'btn btn-secondary';
+            loadLocalJson.textContent = '加载本地JSON文件';
+            loadLocalJson.addEventListener('click', function() {
+                try {
+                    // 创建隐藏的文件输入元素
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.json';
+                    
+                    fileInput.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        
+                        // 检查文件大小是否合理（限制10MB）
+                        if (file.size > 10 * 1024 * 1024) {
+                            alert('文件过大，请选择小于10MB的JSON文件！');
+                            return;
+                        }
+                        
+                        const reader = new FileReader();
+                        
+                        // 超时处理
+                        const timeoutId = setTimeout(() => {
+                            reader.abort();
+                            alert('文件读取超时，请尝试较小的文件！');
+                        }, 10000); // 10秒超时
+                        
+                        reader.onload = function(event) {
+                            clearTimeout(timeoutId); // 清除超时
+                            try {
+                                const jsonData = JSON.parse(event.target.result);
+                                
+                                // 检查是否为单个序列或多个序列的集合
+                                if (jsonData && typeof jsonData === 'object') {
+                                    // 检查是否为规范化的多序列文件格式
+                                    if (jsonData.type === 'guitar_chord_sequences' && Array.isArray(jsonData.sequences)) {
+                                        // 规范化的多首曲子格式
+                                        handleMultipleSequences(jsonData.sequences);
+                                    } else if (jsonData.sequence && Array.isArray(jsonData.sequence)) {
+                                        // 单个序列格式
+                                        loadSingleSequence(jsonData);
+                                    } else if (Array.isArray(jsonData)) {
+                                        // 旧版多个序列的集合
+                                        handleMultipleSequences(jsonData);
+                                    } else {
+                                        alert('文件格式不正确，请确认是有效的和弦进行JSON文件！');
+                                    }
+                                } else {
+                                    alert('文件内容不是有效的JSON对象！');
+                                }
+                            } catch (e) {
+                                if (e instanceof SyntaxError) {
+                                    alert('文件解析失败：JSON格式错误！\n' + e.message);
+                                } else {
+                                    alert('文件解析失败：' + e.message);
+                                }
+                            }
+                        };
+                        
+                        reader.onerror = function() {
+                            clearTimeout(timeoutId);
+                            alert('文件读取错误，请检查文件是否损坏！');
+                        };
+                        
+                        reader.onabort = function() {
+                            clearTimeout(timeoutId);
+                            alert('文件读取已中止！');
+                        };
+                        
+                        reader.readAsText(file);
+                    });
+                    
+                    // 触发文件选择对话框
+                    fileInput.click();
+                } catch (e) {
+                    alert('加载失败：' + e.message);
+                }
+            });
+            
+            // 加载单个序列的函数
+            function loadSingleSequence(sequenceData) {
+                currentState.customChordSequence = sequenceData.sequence || [];
+                if (sequenceData.name) {
+                    document.getElementById('sequenceName').value = sequenceData.name;
+                }
+                currentState.customChordIndex = 0;
+                updateChordSequenceDisplay();
+                
+                // 强制启用自定义和弦功能
+                const useCustomChords = document.getElementById('useCustomChords');
+                const customChordsControls = document.getElementById('customChordsControls');
+                const customChordsGroup = document.getElementById('customChordsGroup');
+                
+                if (useCustomChords) {
+                    useCustomChords.checked = true; // 启用自定义和弦功能
+                    currentState.useCustomChords = true; // 同步状态到currentState
+                }
+                
+                if (customChordsControls) {
+                    // 关键修改：无论当前状态如何，加载序列后都隐藏具体的控件内容
+                    customChordsControls.style.display = 'none'; 
+                }
+                
+                if (customChordsGroup) {
+                    // 显示自定义和弦的打开控件
+                    customChordsGroup.style.display = 'block';
+                }
+                
+                // 确保模式设置正确
+                if (currentState.practiceMode !== 'chord') {
+                    currentState.practiceMode = 'chord';
+                    // 更新UI模式切换
+                    document.querySelector('.btn-practice[data-value="scale"]').classList.remove('active');
+                    document.querySelector('.btn-practice[data-value="chord"]').classList.add('active');
+                    // 更新设置项显示
+                    scaleModeGroup.style.display = 'none';
+                    chordTypeGroup.style.display = 'block';
+                    chordIntervalsGroup.style.display = 'block';
+                }
+                
+                // 生成新的练习
+                generateExercise();
+            }
+            
+            // 处理多个序列的函数（增强版，支持更好的错误处理和用户体验）
+            function handleMultipleSequences(sequences) {
+                try {
+                    // 验证输入是否为数组
+                    if (!Array.isArray(sequences)) {
+                        alert('无效的序列数据，需要数组格式！');
+                        return;
+                    }
+                    
+                    // 过滤无效的序列条目
+                    const validSequences = sequences.filter(seq => {
+                        return seq && typeof seq === 'object' && 
+                               (Array.isArray(seq) || 
+                                (typeof seq.sequence === 'undefined' || Array.isArray(seq.sequence)));
+                    });
+                    
+                    if (validSequences.length === 0) {
+                        alert('文件中没有找到有效的序列！');
+                        return;
+                    }
+                    
+                    if (validSequences.length === 1) {
+                        // 只有一个有效序列，直接加载
+                        const singleSeq = validSequences[0];
+                        // 判断是否为嵌套格式
+                        if (singleSeq.sequence) {
+                            loadSingleSequence(singleSeq);
+                        } else if (Array.isArray(singleSeq)) {
+                            // 尝试作为原始序列数组处理
+                            currentState.customChordSequence = singleSeq;
+                            document.getElementById('sequenceName').value = '未命名序列';
+                            currentState.customChordIndex = 0;
+                            updateChordSequenceDisplay();
+                            alert('序列已加载！\n包含 ' + singleSeq.length + ' 个和弦');
+                        } else {
+                            alert('无法识别的序列格式！');
+                        }
+                        return;
+                    }
+                    
+                    // 创建自定义模态对话框（鼠标点击选择）
+                    const dialogContainer = document.createElement('div');
+                    dialogContainer.style.position = 'fixed';
+                    dialogContainer.style.top = '0';
+                    dialogContainer.style.left = '0';
+                    dialogContainer.style.width = '100%';
+                    dialogContainer.style.height = '100%';
+                    dialogContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                    dialogContainer.style.display = 'flex';
+                    dialogContainer.style.justifyContent = 'center';
+                    dialogContainer.style.alignItems = 'center';
+                    dialogContainer.style.zIndex = '1000';
+                    
+                    const dialogBox = document.createElement('div');
+                    dialogBox.style.backgroundColor = 'white';
+                    dialogBox.style.padding = '20px';
+                    dialogBox.style.borderRadius = '8px';
+                    dialogBox.style.width = '400px';
+                    dialogBox.style.maxHeight = '60vh';
+                    dialogBox.style.overflowY = 'auto';
+                    
+                    const dialogTitle = document.createElement('h3');
+                    dialogTitle.textContent = '选择要加载的歌曲';
+                    dialogTitle.style.marginTop = '0';
+                    dialogTitle.style.marginBottom = '15px';
+                    dialogTitle.style.textAlign = 'center';
+                    
+                    const sequenceList = document.createElement('div');
+                    sequenceList.style.display = 'flex';
+                    sequenceList.style.flexDirection = 'column';
+                    sequenceList.style.gap = '8px';
+                    
+                    // 添加每个序列作为可点击的按钮
+                    validSequences.forEach((seq, index) => {
+                        const seqName = seq.name || `未命名序列 ${index + 1}`;
+                        const optionButton = document.createElement('button');
+                        optionButton.textContent = seqName;
+                        optionButton.style.padding = '10px 15px';
+                        optionButton.style.border = '1px solid #ddd';
+                        optionButton.style.borderRadius = '4px';
+                        optionButton.style.backgroundColor = '#f8f9fa';
+                        optionButton.style.cursor = 'pointer';
+                        optionButton.style.textAlign = 'left';
+                        optionButton.style.transition = 'background-color 0.2s';
+                        
+                        optionButton.addEventListener('mouseover', function() {
+                            this.style.backgroundColor = '#e9ecef';
+                        });
+                        
+                        optionButton.addEventListener('mouseout', function() {
+                            this.style.backgroundColor = '#f8f9fa';
+                        });
+                        
+                        optionButton.addEventListener('click', function() {
+                            // 加载选择的序列
+                            const selectedSeq = validSequences[index];
+                            if (selectedSeq.sequence) {
+                                loadSingleSequence(selectedSeq);
+                            } else if (Array.isArray(selectedSeq)) {
+                                // 尝试作为原始序列数组处理
+                                currentState.customChordSequence = selectedSeq;
+                                document.getElementById('sequenceName').value = '未命名序列';
+                                currentState.customChordIndex = 0;
+                                updateChordSequenceDisplay();
+                            }
+                            
+                            // 移除对话框
+                            document.body.removeChild(dialogContainer);
+                        });
+                        
+                        sequenceList.appendChild(optionButton);
+                    });
+                    
+                    const cancelButton = document.createElement('button');
+                    cancelButton.textContent = '取消';
+                    cancelButton.style.marginTop = '15px';
+                    cancelButton.style.padding = '8px 15px';
+                    cancelButton.style.border = '1px solid #ddd';
+                    cancelButton.style.borderRadius = '4px';
+                    cancelButton.style.backgroundColor = '#6c757d';
+                    cancelButton.style.color = 'white';
+                    cancelButton.style.cursor = 'pointer';
+                    cancelButton.style.width = '100%';
+                    
+                    cancelButton.addEventListener('click', function() {
+                        document.body.removeChild(dialogContainer);
+                    });
+                    
+                    dialogBox.appendChild(dialogTitle);
+                    dialogBox.appendChild(sequenceList);
+                    dialogBox.appendChild(cancelButton);
+                    dialogContainer.appendChild(dialogBox);
+                    
+                    // 添加到文档中
+                    document.body.appendChild(dialogContainer);
+                    
+                    // 点击对话框外部关闭
+                    dialogContainer.addEventListener('click', function(e) {
+                        if (e.target === dialogContainer) {
+                            document.body.removeChild(dialogContainer);
+                        }
+                    });
+                } catch (e) {
+                    alert('处理多序列文件时出错：' + e.message);
+                }
+            }
+            
+            // 添加加载按钮
+            const loadCustomChords = document.createElement('button');
+            loadCustomChords.id = 'loadCustomChords';
+            loadCustomChords.className = 'btn btn-secondary';
+            loadCustomChords.textContent = '加载序列';
+            loadCustomChords.addEventListener('click', function() {
+                try {
+                    console.log('尝试加载序列...');
+                    const savedChords = localStorage.getItem('guitarPracticeCustomChords');
+                    console.log('保存的序列数据:', savedChords);
+                    
+                    // 检查是否有有效的保存序列
+                    let hasValidSequence = false;
+                    let loadedSequence = [];
+                    
+                    if (savedChords) {
+                        try {
+                            const parsedChords = JSON.parse(savedChords);
+                            if (Array.isArray(parsedChords) && parsedChords.length > 0) {
+                                hasValidSequence = true;
+                                loadedSequence = parsedChords;
+                            }
+                        } catch (e) {
+                            console.error('解析保存的序列失败:', e);
+                        }
+                    }
+                    
+                    if (hasValidSequence) {
+                        // 有有效的保存序列，正常加载
+                        currentState.customChordSequence = loadedSequence;
+                        currentState.customChordIndex = 0; // 重置索引，从第一个和弦开始
+                        updateChordSequenceDisplay();
+                        console.log('加载的序列:', currentState.customChordSequence);
+                        
+                        // 无论当前是什么模式，都切换到和弦模式并立即开始练习
+                        currentState.practiceMode = 'chord';
+                        currentState.useCustomChords = true;
+                        
+                        // 更新UI状态
+                        document.querySelector('.btn-practice[data-value="scale"]').classList.remove('active');
+                        document.querySelector('.btn-practice[data-value="chord"]').classList.add('active');
+                        
+                        // 临时禁用change事件监听
+                        const originalChangeListener = useCustomChords.onchange;
+                        useCustomChords.onchange = null;
+                        
+                        // 设置checked属性和display样式
+                        useCustomChords.checked = true;
+                        customChordsControls.style.display = 'none';
+                        
+                        // 重新启用change事件监听
+                        useCustomChords.onchange = originalChangeListener;
+                        
+                        // 显示/隐藏相应的设置组
+                        scaleModeGroup.style.display = 'none';
+                        chordTypeGroup.style.display = 'block';
+                        chordIntervalsGroup.style.display = 'block';
+                        document.getElementById('customChordsGroup').style.display = 'block';
+                        
+                        // 立即生成练习
+                        console.log('准备生成练习...');
+                        generateExercise();
+                        console.log('练习生成完成');
+                    } else {
+                        // 没有有效的保存序列，提示用户
+                        console.log('没有找到保存的序列！');
+                        
+                        // 确保UI显示正确
+                        updateChordSequenceDisplay();
+                        
+                        // 保持当前模式不变，但确保自定义和弦控件可见
+                        if (!useCustomChords.checked) {
+                            // 临时禁用change事件监听
+                            const originalChangeListener = useCustomChords.onchange;
+                            useCustomChords.onchange = null;
+                            
+                            // 设置checked属性和display样式
+                            useCustomChords.checked = true;
+                            customChordsControls.style.display = 'none';
+                            
+                            // 重新启用change事件监听
+                            useCustomChords.onchange = originalChangeListener;
+                        }
+                        
+                        scaleModeGroup.style.display = 'none';
+                        chordTypeGroup.style.display = 'block';
+                        chordIntervalsGroup.style.display = 'block';
+                        document.getElementById('customChordsGroup').style.display = 'block';
+                        
+                        generateExercise();
+                    }
+                } catch (e) {
+                    console.error('加载失败:', e);
+                    alert('加载失败：' + e.message);
+                }
+            });
+            
+            // 将按钮添加到操作区域
+            const customChordActions = document.querySelector('.custom-chord-actions');
+            customChordActions.appendChild(saveCustomChords);
+            customChordActions.appendChild(exportCustomChords); // 添加导出按钮
+            customChordActions.appendChild(loadLocalJson); // 添加加载本地JSON文件按钮
+            customChordActions.appendChild(loadCustomChords);
+            
+            // 页面加载时尝试恢复保存的序列
+            const savedChords = localStorage.getItem('guitarPracticeCustomChords');
+            if (savedChords) {
+                try {
+                    currentState.customChordSequence = JSON.parse(savedChords);
+                } catch (e) {
+                    console.error('Failed to parse saved chords:', e);
+                }
+            }
+            
+            // 更新和弦进行显示
+            function updateChordSequenceDisplay() {
+                customChordSequence.innerHTML = '';
+                
+                // 设置容器样式为flex布局
+                customChordSequence.style.display = 'flex';
+                customChordSequence.style.flexWrap = 'wrap';
+                customChordSequence.style.gap = '8px';
+                
+                if (currentState.customChordSequence.length === 0) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.className = 'empty-sequence';
+                    emptyMsg.textContent = '序列为空，请添加和弦';
+                    // 确保空消息占满整个容器
+                    emptyMsg.style.width = '100%';
+                    customChordSequence.appendChild(emptyMsg);
+                } else {
+                    currentState.customChordSequence.forEach((chord, index) => {
+                        const chordItem = document.createElement('div');
+                        chordItem.className = 'chord-item';
+                        // 设置和弦项样式
+                        chordItem.style.display = 'flex';
+                        chordItem.style.alignItems = 'center';
+                        chordItem.style.gap = '5px';
+                        chordItem.style.padding = '8px 12px';
+                        chordItem.style.margin = '0';
+                        chordItem.style.width = 'auto';
+                        chordItem.style.minWidth = '80px';
+                        
+                        // 添加序号
+                        const chordNumber = document.createElement('span');
+                        chordNumber.className = 'chord-number';
+                        chordNumber.textContent = `${index + 1}.`;
+                        chordNumber.style.fontWeight =  'bold';
+                        chordNumber.style.color = '#666';
+                        
+                        // 显示和弦信息
+                        const chordInfo = document.createElement('span');
+                        chordInfo.className = 'chord-name';
+                        chordInfo.textContent = `${chord.root} ${chordTypeEnglish[chord.type] || chord.type}`;
+                        
+                        // 添加删除按钮
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'remove-chord';
+                        deleteBtn.textContent = '×';
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.stopPropagation(); // 防止触发父元素的点击事件
+                            currentState.customChordSequence.splice(index, 1);
+                            
+                            // 如果当前索引大于等于新的长度，重置索引
+                            if (currentState.customChordIndex >= currentState.customChordSequence.length) {
+                                currentState.customChordIndex = 0;
+                            }
+                            
+                            updateChordSequenceDisplay();
+                            
+                            // 如果启用了自定义和弦，重新生成练习
+                            if (currentState.useCustomChords && currentState.practiceMode === 'chord') {
+                                generateExercise();
+                            }
+                        });
+                        
+                        chordItem.appendChild(chordNumber);
+                        chordItem.appendChild(chordInfo);
+                        chordItem.appendChild(deleteBtn);
+                        customChordSequence.appendChild(chordItem);
+                    });
+                }
+            }
+            
+            // 初始更新序列显示
+            updateChordSequenceDisplay();
+            // 6. 控制按钮
+            nextBtn.addEventListener('click', generateExercise);
+            resetBtn.addEventListener('click', resetPractice);
+            startFullscreenBtn.addEventListener('click', toggleFullscreen);
+            fullscreenNextBtn.addEventListener('click', generateExercise);
+            fullscreenResetBtn.addEventListener('click', resetPractice);
+            // 全屏点击空白处退出
+            practiceScreen.addEventListener('click', (e) => {
+                if (e.target === practiceScreen) toggleFullscreen();
+            });
+            // ---------------------- 初始化 ----------------------
+            // 设置默认按钮状态
+            document.querySelector('.btn-practice[data-value="scale"]').classList.add('active');
+            document.querySelector('.btn-input[data-value="click"]').classList.add('active');
+            document.querySelector('.btn-mode[data-value="ordered"]').classList.add('active');
+            document.querySelector('.btn-range[data-value="12"]').classList.add('active');
+            // 初始生成练习
+            generateExercise();
+            updateStats();
+            
+            // 添加歌曲选择下拉菜单的change事件监听器
+            const melodySelectionEl = document.getElementById('melodySelection');
+            if (melodySelectionEl) {
+                melodySelectionEl.addEventListener('change', function() {
+                    if (currentState.practiceMode === 'melody') {
+                        generateExercise();
+                    }
+                });
+            }
+            
+            // 添加页面关闭/刷新事件监听，确保释放资源
+            window.addEventListener('beforeunload', () => {
+                stopRecording();
+                releaseWakeLock();
+            });
+        });
+    </script>
+
+        <style>
+            /* 实时音高显示样式 */
+            .pitch-display {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background-color: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 8px;
+                font-family: 'Arial', sans-serif;
+                font-size: 16px;
+                z-index: 1000;
+                opacity: 0.7;
+                transition: opacity 0.3s ease;
+                min-width: 120px;
+                text-align: center;
+            }
+            
+            .pitch-display.active {
+                opacity: 1;
+                background-color: rgba(0, 0, 0, 0.9);
+            }
+            
+            /* 在弹奏拾音下隐藏统计信息标题和相关元素 */
+            #inputModeMicrophone:checked ~ .stats-panel {
+                display: none;
+            }
+            
+            #inputModeMicrophone:checked ~ .practice-container .stats {
+                display: none;
+            }
+            
+            /* 确保全屏模式下的统计信息也被隐藏 */
+            #fullscreenPracticeScreen #inputModeMicrophone:checked ~ .stats {
+                display: none;
+            }
+            
+            /* 和弦进行样式优化 - 深色主题 */
+            #customChordSequence {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 10px;
+                min-height: 50px;
+                border: 1px solid #555;
+                border-radius: 4px;
+                background-color: #333;
+            }
+            
+            .chord-item {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 8px 12px;
+                margin: 0;
+                width: auto;
+                min-width: 80px;
+                background-color: #444;
+                border: 1px solid #666;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .chord-item:hover {
+                background-color: #555;
+                border-color: #888;
+            }
+            
+            .chord-number {
+                font-weight: bold;
+                color: #aaa;
+                font-size: 12px;
+            }
+            
+            .chord-name {
+                font-size: 11px;
+                color: #eee;
+            }
+            
+            .remove-chord {
+                background: none;
+                border: none;
+                color: #aaa;
+                cursor: pointer;
+                font-size: 16px;
+                line-height: 1;
+                padding: 0 5px;
+                margin-left: 5px;
+            }
+            
+            .remove-chord:hover {
+                color: #ff6666;
+            }
+            
+            .empty-sequence {
+                width: 100%;
+                text-align: center;
+                color: #aaa;
+                font-style: italic;
+                padding: 10px 0;
+            }
+        </style>
+</body>
+</html>
